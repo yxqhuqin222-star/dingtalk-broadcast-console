@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>钉钉成单播报</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f1ea;
+      --ink: #1d1b18;
+      --muted: #6f685f;
+      --line: #d8d0c4;
+      --panel: #fffaf0;
+      --panel-2: #ece5d8;
+      --field: #fffdf8;
+      --accent: #b42318;
+      --accent-dark: #8f1d14;
+      --ok: #147a46;
+      --bad: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Songti SC", "Noto Serif CJK SC", "STSong", Georgia, serif;
+    }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 20px 46px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: flex-end;
+      padding-bottom: 18px;
+      border-bottom: 2px solid var(--ink);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(32px, 5vw, 56px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+    .sub {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+    .stamp {
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      padding: 9px 12px;
+      font-weight: 700;
+      transform: rotate(1.5deg);
+      white-space: nowrap;
+    }
+    .upload-bar, section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: 0 8px 0 var(--panel-2);
+    }
+    .upload-bar {
+      display: grid;
+      grid-template-columns: auto minmax(240px, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      margin-top: 24px;
+      padding: 16px 18px;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(320px, .8fr);
+      gap: 18px;
+      margin-top: 22px;
+    }
+    section { padding: 18px; }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 4px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, .45);
+      font: 12px ui-sans-serif, system-ui, sans-serif;
+      white-space: nowrap;
+    }
+    label {
+      display: block;
+      margin-top: 12px;
+      color: var(--muted);
+      font: 13px ui-sans-serif, system-ui, sans-serif;
+    }
+    input, textarea {
+      width: 100%;
+      margin-top: 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--field);
+      color: var(--ink);
+      padding: 10px 11px;
+      font: 14px ui-sans-serif, system-ui, sans-serif;
+      outline: none;
+    }
+    input:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(180, 35, 24, .12);
+    }
+    textarea {
+      min-height: 82px;
+      resize: vertical;
+    }
+    input[type="checkbox"] {
+      width: auto;
+      margin: 0 8px 0 0;
+    }
+    .checkline {
+      display: flex;
+      align-items: center;
+      color: var(--ink);
+      font: 14px ui-sans-serif, system-ui, sans-serif;
+    }
+    .hint, .status {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font: 12px ui-sans-serif, system-ui, sans-serif;
+    }
+    .status.ok { color: var(--ok); }
+    .status.bad { color: var(--bad); }
+    .rules {
+      display: grid;
+      gap: 12px;
+    }
+    .rule-card {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 253, 248, .72);
+      padding: 14px 14px 14px 16px;
+    }
+    .rule-card.editing {
+      border-left: 4px solid var(--accent);
+      padding-left: 13px;
+    }
+    .rule-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 14px;
+      align-items: center;
+    }
+    .rule-name {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.25;
+    }
+    .rule-meta {
+      margin-top: 5px;
+      color: var(--muted);
+      font: 12px ui-sans-serif, system-ui, sans-serif;
+    }
+    .count-badge {
+      min-width: 48px;
+      border: 1px solid rgba(180, 35, 24, .26);
+      border-radius: 8px;
+      padding: 7px 10px;
+      color: var(--accent);
+      background: #fff7ed;
+      font: 700 16px ui-sans-serif, system-ui, sans-serif;
+      text-align: center;
+    }
+    .rule-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    button {
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: white;
+      padding: 11px 16px;
+      font: 700 14px ui-sans-serif, system-ui, sans-serif;
+      cursor: pointer;
+      box-shadow: 0 4px 0 var(--accent-dark);
+      transition: transform .12s ease, box-shadow .12s ease;
+      white-space: nowrap;
+    }
+    button.secondary {
+      background: transparent;
+      color: var(--ink);
+      box-shadow: none;
+      padding-inline: 8px;
+    }
+    button.ghost {
+      background: #fff7ed;
+      color: var(--accent);
+      border: 1px solid rgba(180, 35, 24, .28);
+      box-shadow: none;
+    }
+    button:active {
+      transform: translateY(3px) scale(.98);
+      box-shadow: 0 1px 0 var(--accent-dark);
+    }
+    button.secondary:active, button.ghost:active {
+      box-shadow: none;
+    }
+    button:disabled {
+      cursor: wait;
+      opacity: .6;
+    }
+    .editor {
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      background: #fbf4e8;
+    }
+    .editor-title {
+      margin: 0 0 6px;
+      font: 700 14px ui-sans-serif, system-ui, sans-serif;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0 12px;
+    }
+    .form-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    #globalStatus {
+      min-height: 42px;
+      margin-top: 16px;
+      padding: 12px 14px;
+      border: 1px dashed var(--line);
+      background: rgba(255,255,255,.42);
+      font: 14px ui-sans-serif, system-ui, sans-serif;
+      white-space: pre-wrap;
+    }
+    #globalStatus.ok { border-color: rgba(20,122,70,.45); color: var(--ok); }
+    #globalStatus.bad { border-color: rgba(180,35,24,.45); color: var(--bad); }
+    .empty {
+      padding: 22px;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      font: 14px ui-sans-serif, system-ui, sans-serif;
+      text-align: center;
+    }
+    @media (max-width: 860px) {
+      main { padding: 22px 14px 36px; }
+      header { align-items: flex-start; flex-direction: column; }
+      .stamp { transform: none; }
+      .upload-bar, .layout, .rule-row, .grid-2 {
+        grid-template-columns: 1fr;
+      }
+      .rule-actions { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>钉钉成单播报</h1>
+        <p class="sub">上传每日 CSV，按规则汇总后，一键播报成单消息到钉钉群聊。</p>
+      </div>
+      <div class="stamp">规则保存 · 上传即播</div>
+    </header>
+
+    <div class="upload-bar">
+      <h2>上传每日 CSV</h2>
+      <input id="fileInput" type="file" accept=".csv">
+      <div id="fileStatus" class="pill">等待上传文件</div>
+    </div>
+
+    <div class="layout">
+      <section>
+        <div class="section-head">
+          <h2>已制定规则</h2>
+          <span id="ruleCount" class="pill">0 个规则</span>
+        </div>
+        <div id="rulesList" class="rules"></div>
+        <div id="globalStatus">上传文件后，点击任一规则的【播报】即可发送。</div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>新增播报规则</h2>
+        </div>
+        <form id="newRuleForm">
+          <label>规则名称</label>
+          <input name="name" placeholder="例如：小学1元-纷格进量" required>
+
+          <div class="grid-2">
+            <label>条件 1 列名
+              <input name="filterColumn1" value="lastfrom值">
+            </label>
+            <label>条件 1 值
+              <input name="filterValue1" placeholder="请输入">
+            </label>
+            <label>条件 2 列名
+              <input name="filterColumn2" value="课程年级">
+            </label>
+            <label>条件 2 值
+              <input name="filterValue2" value="三四五六年级">
+            </label>
+          </div>
+
+          <div class="grid-2">
+            <label>统计列
+              <input name="amountColumn" value="订单实付金额">
+            </label>
+            <label>统计值
+              <input name="amountValue" value="1">
+            </label>
+          </div>
+
+          <label>机器人关键词</label>
+          <input name="keyword" value="成单">
+
+          <label>播报文案</label>
+          <textarea name="template">{keyword} 小学1元-纷格进量：{count}</textarea>
+          <p class="hint">可用变量：{keyword}、{count}</p>
+
+          <label>被 @ 人手机号</label>
+          <input name="atMobiles" placeholder="多个手机号用逗号分隔">
+
+          <label>被 @ 人 userId</label>
+          <input name="atUserIds" placeholder="没有手机号时可填 userId">
+
+          <label class="checkline">
+            <input name="isAtAll" type="checkbox"> @所有人
+          </label>
+          <p class="hint">可填写手机号，也可以勾选 @所有人。保存后会出现在左侧，上传文件后可直接播报。</p>
+
+          <div class="form-actions">
+            <button type="submit">保存为规则</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const apiBase = window.location.protocol === "file:" ? "http://127.0.0.1:8766" : "";
+    const storageKey = "dingtalkBroadcastRules.v1";
+    const fileInput = document.querySelector("#fileInput");
+    const fileStatus = document.querySelector("#fileStatus");
+    const rulesList = document.querySelector("#rulesList");
+    const ruleCount = document.querySelector("#ruleCount");
+    const newRuleForm = document.querySelector("#newRuleForm");
+    const globalStatus = document.querySelector("#globalStatus");
+
+    let editingRuleId = null;
+    let rules = loadRules();
+
+    if (window.location.protocol === "file:") {
+      setStatus("bad", "当前是直接打开 HTML 文件。请确认本地服务已启动；更推荐打开 http://127.0.0.1:8766 使用。");
+    }
+
+    renderRules();
+
+    fileInput.addEventListener("change", async () => {
+      const file = currentFile();
+      if (!file) {
+        fileStatus.textContent = "等待上传文件";
+        return;
+      }
+      fileStatus.textContent = `${file.name} · 正在读取`;
+      setStatus("", "正在按已制定规则计算汇总量...");
+      await refreshPreviews();
+    });
+
+    newRuleForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const rule = formToRule(new FormData(newRuleForm));
+      rules.push(rule);
+      saveRules();
+      newRuleForm.reset();
+      newRuleForm.elements.filterColumn1.value = "lastfrom值";
+      newRuleForm.elements.filterColumn2.value = "课程年级";
+      newRuleForm.elements.filterValue2.value = "三四五六年级";
+      newRuleForm.elements.amountColumn.value = "订单实付金额";
+      newRuleForm.elements.amountValue.value = "1";
+      newRuleForm.elements.keyword.value = "成单";
+      newRuleForm.elements.template.value = "{keyword} 小学1元-纷格进量：{count}";
+      renderRules();
+      await refreshPreviews();
+      setStatus("ok", `已保存规则：${rule.name}`);
+    });
+
+    function loadRules() {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length) return parsed;
+        } catch {}
+      }
+      return [
+        {
+          id: crypto.randomUUID(),
+          name: "小学1元-纷格进量",
+          filterColumn1: "lastfrom值",
+          filterValue1: "out_wxst_wxstqt_1774945025540",
+          filterColumn2: "课程年级",
+          filterValue2: "三四五六年级",
+          amountColumn: "订单实付金额",
+          amountValue: "1",
+          keyword: "成单",
+          template: "{keyword} 小学1元-纷格进量：{count}",
+          atMobiles: "",
+          atUserIds: "",
+          isAtAll: false,
+          lastBroadcast: "",
+          count: "—",
+        },
+      ];
+    }
+
+    function saveRules() {
+      localStorage.setItem(storageKey, JSON.stringify(rules));
+    }
+
+    function renderRules() {
+      ruleCount.textContent = `${rules.length} 个规则`;
+      if (!rules.length) {
+        rulesList.innerHTML = `<div class="empty">还没有规则，请先在右侧新增。</div>`;
+        return;
+      }
+
+      rulesList.innerHTML = rules.map((rule) => `
+        <article class="rule-card ${editingRuleId === rule.id ? "editing" : ""}" data-id="${rule.id}">
+          <div class="rule-row">
+            <div>
+              <h3 class="rule-name">${escapeHtml(rule.name)}</h3>
+              <div class="rule-meta">${rule.lastBroadcast ? `上次播报：${escapeHtml(rule.lastBroadcast)}` : "上传文件后可直接播报"}</div>
+            </div>
+            <div class="count-badge">${escapeHtml(String(rule.count ?? "—"))}</div>
+            <div class="rule-actions">
+              <button type="button" data-action="broadcast">播报</button>
+              <button class="secondary" type="button" data-action="edit">${editingRuleId === rule.id ? "收起" : "编辑"}</button>
+            </div>
+          </div>
+          ${editingRuleId === rule.id ? editorHtml(rule) : ""}
+        </article>
+      `).join("");
+
+      rulesList.querySelectorAll("[data-action='broadcast']").forEach((button) => {
+        button.addEventListener("click", () => broadcastRule(button.closest(".rule-card").dataset.id, button));
+      });
+      rulesList.querySelectorAll("[data-action='edit']").forEach((button) => {
+        button.addEventListener("click", () => {
+          const id = button.closest(".rule-card").dataset.id;
+          editingRuleId = editingRuleId === id ? null : id;
+          renderRules();
+        });
+      });
+      rulesList.querySelectorAll("[data-action='save-edit']").forEach((button) => {
+        button.addEventListener("click", async () => saveEditedRule(button.closest(".rule-card").dataset.id));
+      });
+      rulesList.querySelectorAll("[data-action='delete']").forEach((button) => {
+        button.addEventListener("click", () => deleteRule(button.closest(".rule-card").dataset.id));
+      });
+    }
+
+    function editorHtml(rule) {
+      return `
+        <div class="editor">
+          <p class="editor-title">编辑规则</p>
+          <label>规则名称</label>
+          <input name="name" value="${escapeAttribute(rule.name)}">
+          <div class="grid-2">
+            <label>条件 1 列名
+              <input name="filterColumn1" value="${escapeAttribute(rule.filterColumn1)}">
+            </label>
+            <label>条件 1 值
+              <input name="filterValue1" value="${escapeAttribute(rule.filterValue1)}">
+            </label>
+            <label>条件 2 列名
+              <input name="filterColumn2" value="${escapeAttribute(rule.filterColumn2)}">
+            </label>
+            <label>条件 2 值
+              <input name="filterValue2" value="${escapeAttribute(rule.filterValue2)}">
+            </label>
+            <label>统计列
+              <input name="amountColumn" value="${escapeAttribute(rule.amountColumn)}">
+            </label>
+            <label>统计值
+              <input name="amountValue" value="${escapeAttribute(rule.amountValue)}">
+            </label>
+          </div>
+          <label>机器人关键词</label>
+          <input name="keyword" value="${escapeAttribute(rule.keyword)}">
+          <label>播报文案</label>
+          <textarea name="template">${escapeHtml(rule.template)}</textarea>
+          <label>被 @ 人手机号</label>
+          <input name="atMobiles" value="${escapeAttribute(rule.atMobiles || "")}">
+          <label>被 @ 人 userId</label>
+          <input name="atUserIds" value="${escapeAttribute(rule.atUserIds || "")}">
+          <label class="checkline">
+            <input name="isAtAll" type="checkbox" ${rule.isAtAll ? "checked" : ""}> @所有人
+          </label>
+          <div class="form-actions">
+            <button type="button" data-action="save-edit">保存</button>
+            <button class="ghost" type="button" data-action="delete">删除规则</button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function refreshPreviews() {
+      const file = currentFile();
+      if (!file) {
+        renderRules();
+        setStatus("", "请先上传每日 CSV 文件。");
+        return;
+      }
+
+      let rows = null;
+      for (const rule of rules) {
+        try {
+          const data = await postRule("/api/preview", rule);
+          rule.count = data.count;
+          rows = data.rows;
+        } catch (error) {
+          rule.count = "!";
+          setStatus("bad", `规则「${rule.name}」计算失败：${error.message}`);
+        }
+      }
+      saveRules();
+      renderRules();
+      fileStatus.textContent = rows === null ? `${file.name} · 已上传` : `${file.name} · 已读取 ${rows} 行`;
+      if (rows !== null) setStatus("ok", "汇总量已刷新，可以点击规则右侧【播报】。");
+    }
+
+    async function broadcastRule(ruleId, button) {
+      const rule = rules.find((item) => item.id === ruleId);
+      if (!rule) return;
+      if (!currentFile()) {
+        setStatus("bad", "请先上传每日 CSV 文件，再点击播报。");
+        return;
+      }
+
+      button.disabled = true;
+      setStatus("", `正在播报：${rule.name}...`);
+      try {
+        const data = await postRule("/api/broadcast", rule);
+        rule.count = data.count;
+        rule.lastBroadcast = formatTime(new Date());
+        saveRules();
+        renderRules();
+        setStatus("ok", `发送成功：${data.message}\n钉钉返回：${JSON.stringify(data.dingtalk)}`);
+      } catch (error) {
+        setStatus("bad", `发送失败：${error.message}`);
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function saveEditedRule(ruleId) {
+      const card = rulesList.querySelector(`[data-id="${CSS.escape(ruleId)}"]`);
+      const index = rules.findIndex((item) => item.id === ruleId);
+      if (!card || index === -1) return;
+      rules[index] = {
+        ...rules[index],
+        ...formToRule(new FormDataFromContainer(card.querySelector(".editor"))),
+        id: ruleId,
+        lastBroadcast: rules[index].lastBroadcast,
+        count: rules[index].count,
+      };
+      saveRules();
+      editingRuleId = null;
+      renderRules();
+      await refreshPreviews();
+      setStatus("ok", `已保存规则：${rules[index].name}`);
+    }
+
+    function deleteRule(ruleId) {
+      const rule = rules.find((item) => item.id === ruleId);
+      rules = rules.filter((item) => item.id !== ruleId);
+      editingRuleId = null;
+      saveRules();
+      renderRules();
+      setStatus("ok", `已删除规则：${rule ? rule.name : ""}`);
+    }
+
+    async function postRule(path, rule) {
+      const formData = new FormData();
+      formData.append("file", currentFile());
+      for (const [key, value] of Object.entries(rule)) {
+        if (["id", "name", "count", "lastBroadcast"].includes(key)) continue;
+        if (key === "isAtAll") {
+          if (value) formData.append(key, "true");
+          continue;
+        }
+        formData.append(key, value ?? "");
+      }
+      const response = await fetch(`${apiBase}${path}`, { method: "POST", body: formData });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || JSON.stringify(data.dingtalk || data));
+      }
+      return data;
+    }
+
+    function formToRule(formData) {
+      return {
+        id: crypto.randomUUID(),
+        name: (formData.get("name") || "未命名规则").trim(),
+        filterColumn1: (formData.get("filterColumn1") || "").trim(),
+        filterValue1: (formData.get("filterValue1") || "").trim(),
+        filterColumn2: (formData.get("filterColumn2") || "").trim(),
+        filterValue2: (formData.get("filterValue2") || "").trim(),
+        amountColumn: (formData.get("amountColumn") || "").trim(),
+        amountValue: (formData.get("amountValue") || "").trim(),
+        keyword: (formData.get("keyword") || "").trim(),
+        template: (formData.get("template") || "").trim(),
+        atMobiles: (formData.get("atMobiles") || "").trim(),
+        atUserIds: (formData.get("atUserIds") || "").trim(),
+        isAtAll: formData.get("isAtAll") === "on",
+        lastBroadcast: "",
+        count: "—",
+      };
+    }
+
+    function FormDataFromContainer(container) {
+      const formData = new FormData();
+      container.querySelectorAll("input, textarea").forEach((field) => {
+        if (!field.name) return;
+        if (field.type === "checkbox") {
+          if (field.checked) formData.append(field.name, "on");
+        } else {
+          formData.append(field.name, field.value);
+        }
+      });
+      return formData;
+    }
+
+    function currentFile() {
+      return fileInput.files && fileInput.files[0];
+    }
+
+    function setStatus(className, text) {
+      globalStatus.className = className || "";
+      globalStatus.textContent = text;
+    }
+
+    function formatTime(date) {
+      return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      }[char]));
+    }
+
+    function escapeAttribute(value) {
+      return escapeHtml(value);
+    }
+  </script>
+</body>
+</html>
