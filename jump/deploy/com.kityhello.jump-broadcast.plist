@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.kityhello.jump-broadcast</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/python3</string>
+    <string>-u</string>
+    <string>/Users/kityhello/workplace/project/work/jump/daily_broadcast.py</string>
+    <string>due</string>
+    <string>--send</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/kityhello/workplace/project/work/jump</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>SSL_CERT_FILE</key>
+    <string>/etc/ssl/cert.pem</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/kityhello/Library/Logs/jump/broadcast.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/kityhello/Library/Logs/jump/broadcast-error.log</string>
+</dict>
+</plist>

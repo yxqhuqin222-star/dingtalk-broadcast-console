@@ -1,0 +1,13 @@
+[build]
+  publish = "bobao"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/preview"
+  to = "/.netlify/functions/preview"
+  status = 200
+
+[[redirects]]
+  from = "/api/broadcast"
+  to = "/.netlify/functions/broadcast"
+  status = 200

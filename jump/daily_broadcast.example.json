@@ -1,0 +1,32 @@
+{
+  "city": "北京",
+  "dingtalk_keyword": "jump",
+  "weather": "晴，12-22 度",
+  "next_holiday_name": "端午假期",
+  "next_holiday_date": "2026-06-19",
+  "work_end": "19:00",
+  "industry_source": "jike",
+  "enabled": {
+    "morning": true,
+    "noon": true,
+    "industry": true,
+    "countdown": true,
+    "evening": true
+  },
+  "lunch_options": ["盖饭", "麻辣烫", "牛肉面", "轻食沙拉"],
+  "industry_news": [
+    {
+      "title": "AI 教学助手进入常态化试点",
+      "summary": "多地学校开始把 AI 助教用于课后答疑和作业讲评。"
+    },
+    {
+      "title": "教育内容生产更重视可验证来源",
+      "summary": "平台正在加强 AI 生成内容的审核和出处标注。"
+    },
+    {
+      "title": "企业知识库机器人继续升温",
+      "summary": "同事群机器人可以先从问答和摘要两个高频场景切入。"
+    }
+  ],
+  "tomorrow_reminders": ["上午同步本周重点", "下午整理行业小报素材"]
+}

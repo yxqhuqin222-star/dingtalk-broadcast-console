@@ -19,6 +19,21 @@ DEFAULT_KEYWORD = "成单"
 DEFAULT_TEMPLATE = "{keyword} 小学1元-纷格进量：{count}"
 
 
+def load_local_env():
+    for path in (Path(__file__).resolve().parent / ".env.local", Path(__file__).resolve().parent / ".env"):
+        if not path.exists():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_local_env()
+
+
 def build_report(csv_path):
     return build_report_from_rows(read_csv_rows(csv_path))
 

@@ -363,7 +363,7 @@
   </main>
 
   <script>
-    const apiBase = window.location.protocol === "file:" ? "http://127.0.0.1:8766" : "";
+    const apiBase = window.location.protocol === "file:" ? "http://127.0.0.1:8765" : "";
     const storageKey = "dingtalkBroadcastRules.v1";
     const fileInput = document.querySelector("#fileInput");
     const fileStatus = document.querySelector("#fileStatus");
@@ -376,7 +376,7 @@
     let rules = loadRules();
 
     if (window.location.protocol === "file:") {
-      setStatus("bad", "当前是直接打开 HTML 文件。请确认本地服务已启动；更推荐打开 http://127.0.0.1:8766 使用。");
+      setStatus("bad", "当前是直接打开 HTML 文件。请确认本地服务已启动；更推荐打开 http://127.0.0.1:8765 使用。");
     }
 
     renderRules();
