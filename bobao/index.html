@@ -290,8 +290,8 @@
 
     <div class="upload-bar">
       <h2>上传每日 CSV</h2>
-      <input id="fileInput" type="file" accept=".csv">
-      <div id="fileStatus" class="pill">等待上传文件</div>
+      <button id="selectFixedFile" type="button">选择文件</button>
+      <div id="fileStatus" class="pill">等待读取 demo.csv</div>
     </div>
 
     <div class="layout">
@@ -365,7 +365,7 @@
   <script>
     const apiBase = window.location.protocol === "file:" ? "http://127.0.0.1:8765" : "";
     const storageKey = "dingtalkBroadcastRules.v1";
-    const fileInput = document.querySelector("#fileInput");
+    const selectFixedFile = document.querySelector("#selectFixedFile");
     const fileStatus = document.querySelector("#fileStatus");
     const rulesList = document.querySelector("#rulesList");
     const ruleCount = document.querySelector("#ruleCount");
@@ -373,6 +373,7 @@
     const globalStatus = document.querySelector("#globalStatus");
 
     let editingRuleId = null;
+    let fixedFileSelected = false;
     let rules = loadRules();
 
     if (window.location.protocol === "file:") {
@@ -381,13 +382,9 @@
 
     renderRules();
 
-    fileInput.addEventListener("change", async () => {
-      const file = currentFile();
-      if (!file) {
-        fileStatus.textContent = "等待上传文件";
-        return;
-      }
-      fileStatus.textContent = `${file.name} · 正在读取`;
+    selectFixedFile.addEventListener("click", async () => {
+      fixedFileSelected = true;
+      fileStatus.textContent = "demo.csv · 正在读取";
       setStatus("", "正在按已制定规则计算汇总量...");
       await refreshPreviews();
     });
@@ -608,7 +605,6 @@
 
     async function postRule(path, rule) {
       const formData = new FormData();
-      formData.append("file", currentFile());
       for (const [key, value] of Object.entries(rule)) {
         if (["id", "name", "count", "lastBroadcast"].includes(key)) continue;
         if (key === "isAtAll") {
@@ -659,7 +655,7 @@
     }
 
     function currentFile() {
-      return fileInput.files && fileInput.files[0];
+      return fixedFileSelected ? { name: "demo.csv" } : null;
     }
 
     function setStatus(className, text) {

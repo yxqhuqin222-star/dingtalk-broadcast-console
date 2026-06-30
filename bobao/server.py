@@ -20,6 +20,7 @@ from send_report import (
 
 ROOT = Path(__file__).resolve().parent
 INDEX_HTML = ROOT / "index.html"
+FIXED_CSV_PATH = Path("/Users/kityhello/workplace/project/work/bobao/demo.csv")
 DEFAULT_GRADES = "三四五六年级"
 
 
@@ -133,10 +134,15 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         content_length = int(self.headers.get("Content-Length", "0"))
-        fields, files = parse_multipart(self.headers, self.rfile.read(content_length))
-        file_data = files.get("file")
-        if not file_data:
-            json_response(self, 400, {"ok": False, "error": "请先上传 CSV 文件"})
+        fields, _ = parse_multipart(self.headers, self.rfile.read(content_length))
+        try:
+            file_data = FIXED_CSV_PATH.read_bytes()
+        except OSError as error:
+            json_response(
+                self,
+                500,
+                {"ok": False, "error": f"无法读取固定 CSV 文件 {FIXED_CSV_PATH}：{error}"},
+            )
             return
 
         try:
