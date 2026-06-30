@@ -6,6 +6,16 @@
   "next_holiday_date": "2026-06-19",
   "work_end": "19:00",
   "industry_source": "jike",
+  "content_feeds": [
+    {
+      "name": "示例公众号",
+      "url": "http://localhost:8001/feed/example.xml"
+    },
+    {
+      "name": "示例网站",
+      "url": "https://example.com/feed.xml"
+    }
+  ],
   "enabled": {
     "morning": true,
     "noon": true,

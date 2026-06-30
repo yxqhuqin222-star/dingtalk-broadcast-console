@@ -15,18 +15,28 @@ from daily_broadcast import (
     build_broadcast,
     due_broadcasts,
     fetch_weather,
+    fetch_content_feeds,
     fetch_owen_links,
+    fetch_wechat_feeds,
     filter_unsent_news,
     load_sent_news_ids,
     load_sent_news_urls,
+    load_config,
     load_sent_keys,
     load_sent_fact_ids,
+    load_sent_learning_ids,
+    LEARNING_THEMES,
+    format_learning_card,
+    validate_learning_card,
     parse_owen_links,
+    parse_wechat_feed,
+    prepare_industry_news,
     news_item_id,
     save_sent_news_ids,
     save_sent_news_urls,
     save_sent_keys,
     save_sent_fact_ids,
+    save_sent_learning_ids,
 )
 
 
@@ -43,38 +53,88 @@ class DailyBroadcastTest(unittest.TestCase):
         self.assertNotIn("今日提醒", broadcast.message)
         self.assertEqual("psychology", broadcast.context["fact_category"])
 
-    def test_noon_broadcast_is_always_a_history_fact(self):
+    def test_noon_broadcast_is_a_weekly_learning_card(self):
         config = BroadcastConfig()
         for day_number in range(22, 27):
             with self.subTest(day_number=day_number):
                 broadcast = build_broadcast("noon", config, date(2026, 6, day_number))
-                self.assertIn("午间历史冷知识", broadcast.message)
-                self.assertEqual("history", broadcast.context["fact_category"])
+                self.assertIn("三分钟知识卡", broadcast.message)
+                self.assertIn(f"（{day_number - 21}/5）", broadcast.message)
+                self.assertIn("来源：", broadcast.message)
+                self.assertIn("预计阅读：3 分钟", broadcast.message)
 
-    def test_fact_categories_do_not_repeat_sent_content(self):
+    def test_psychology_fact_does_not_repeat_sent_content(self):
         config = BroadcastConfig(weather="晴")
         first_morning = build_broadcast("morning", config, date(2026, 6, 22))
-        first_noon = build_broadcast("noon", config, date(2026, 6, 22))
         config.sent_fact_ids["psychology"].add(first_morning.context["fact_id"])
-        config.sent_fact_ids["history"].add(first_noon.context["fact_id"])
 
         second_morning = build_broadcast("morning", config, date(2026, 6, 23))
-        second_noon = build_broadcast("noon", config, date(2026, 6, 23))
         self.assertNotEqual(first_morning.context["fact_id"], second_morning.context["fact_id"])
-        self.assertNotEqual(first_noon.context["fact_id"], second_noon.context["fact_id"])
 
     def test_fact_pool_exhaustion_does_not_repeat(self):
         config = BroadcastConfig(weather="晴")
-        from daily_broadcast import HISTORY_FACTS, PSYCHOLOGY_FACTS, fact_id
+        from daily_broadcast import PSYCHOLOGY_FACTS, fact_id
 
         config.sent_fact_ids["psychology"] = {fact_id(fact) for fact in PSYCHOLOGY_FACTS}
-        config.sent_fact_ids["history"] = {fact_id(fact) for fact in HISTORY_FACTS}
         morning = build_broadcast("morning", config, date(2026, 6, 26))
-        noon = build_broadcast("noon", config, date(2026, 6, 26))
         self.assertIn("心理学冷知识题库已用完", morning.message)
-        self.assertIn("历史冷知识题库已用完", noon.message)
         self.assertNotIn("fact_id", morning.context)
-        self.assertNotIn("fact_id", noon.context)
+
+    def test_all_learning_cards_meet_length_and_source_rules(self):
+        monday = date(2026, 6, 22)
+        for theme in LEARNING_THEMES:
+            for weekday, card in enumerate(theme["cards"]):
+                with self.subTest(theme=theme["id"], weekday=weekday):
+                    message = format_learning_card(theme, card, monday.replace(day=22 + weekday))
+                    self.assertGreaterEqual(len(message), 250)
+                    self.assertLessEqual(len(message), 400)
+                    self.assertTrue(theme["source_url"].startswith("https://"))
+
+    def test_learning_card_rejects_missing_or_invalid_source(self):
+        theme = {**LEARNING_THEMES[0], "source_url": "not-a-url"}
+        card = theme["cards"][0]
+        message = format_learning_card(theme, card, date(2026, 6, 22))
+        self.assertFalse(validate_learning_card(theme, card, message))
+
+    def test_learning_card_rejects_content_over_length_limit(self):
+        theme = LEARNING_THEMES[0]
+        card = {**theme["cards"][0], "extension": "过长内容" * 100}
+        message = format_learning_card(theme, card, date(2026, 6, 22))
+        self.assertFalse(validate_learning_card(theme, card, message))
+
+    def test_learning_card_includes_yesterday_review_after_monday(self):
+        config = BroadcastConfig()
+        monday = build_broadcast("noon", config, date(2026, 6, 22))
+        tuesday = build_broadcast("noon", config, date(2026, 6, 23))
+        self.assertNotIn("昨日回响：", monday.message)
+        self.assertIn("昨日回响：", tuesday.message)
+
+    def test_friday_learning_card_is_weekly_summary(self):
+        broadcast = build_broadcast("noon", BroadcastConfig(), date(2026, 6, 26))
+        self.assertIn("本周知识拼图", broadcast.message)
+
+    def test_learning_card_uses_three_level_deduplication(self):
+        day = date(2026, 6, 22)
+        config = BroadcastConfig()
+        first = build_broadcast("noon", config, day)
+        for kind, value in first.context["learning_keys"].items():
+            duplicate_config = BroadcastConfig()
+            duplicate_config.sent_learning_ids[kind].add(value)
+            with self.subTest(kind=kind):
+                self.assertIsNone(build_broadcast("noon", duplicate_config, day))
+
+    def test_learning_state_is_persisted_without_losing_other_state(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            save_sent_keys(path, {"2026-06-22:morning"})
+            expected = {
+                "theme_slots": {"psychology:0"},
+                "dates": {"2026-06-22"},
+                "content": {"content-hash"},
+            }
+            save_sent_learning_ids(path, expected)
+            self.assertEqual(expected, load_sent_learning_ids(path))
+            self.assertEqual({"2026-06-22:morning"}, load_sent_keys(path))
 
     def test_sent_fact_ids_are_persisted_without_losing_sent_keys(self):
         with TemporaryDirectory() as directory:
@@ -193,6 +253,196 @@ class DailyBroadcastTest(unittest.TestCase):
             [item["url"] for item in news],
         )
 
+    def test_owen_links_fetch_uses_explicit_ssl_context(self):
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return b""
+
+        with patch(
+            "daily_broadcast.urllib.request.urlopen",
+            return_value=Response(),
+        ) as urlopen:
+            fetch_owen_links()
+        self.assertIsNotNone(urlopen.call_args.kwargs["context"])
+
+    def test_wechat_feed_parser_extracts_complete_articles(self):
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+          <channel>
+            <title>示例公众号</title>
+            <item>
+              <title><![CDATA[文章标题]]></title>
+              <link>https://mp.weixin.qq.com/s/example</link>
+              <dc:creator><![CDATA[作者]]></dc:creator>
+              <pubDate>Mon, 29 Jun 2026 08:00:00 +0800</pubDate>
+              <description><![CDATA[<p>文章 <strong>摘要</strong></p>]]></description>
+            </item>
+          </channel>
+        </rss>""".encode()
+        self.assertEqual(
+            [
+                {
+                    "title": "文章标题",
+                    "author": "作者",
+                    "published_at": "Mon, 29 Jun 2026 08:00:00 +0800",
+                    "summary": "文章 摘要",
+                    "url": "https://mp.weixin.qq.com/s/example",
+                }
+            ],
+            parse_wechat_feed(xml),
+        )
+
+    def test_wechat_feed_summary_is_truncated(self):
+        xml = f"""<rss><channel><title>公众号</title><item>
+            <title>文章标题</title>
+            <link>https://mp.weixin.qq.com/s/example</link>
+            <pubDate>2026-06-29</pubDate>
+            <description>{"摘要" * 150}</description>
+        </item></channel></rss>"""
+        item = parse_wechat_feed(xml)[0]
+        self.assertEqual(201, len(item["summary"]))
+        self.assertTrue(item["summary"].endswith("…"))
+
+    def test_wechat_feed_urls_are_loaded_from_config(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "industry_source": "wechat",
+                        "wechat_feed_urls": ["https://rss.example.com/feed"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = load_config(path)
+        self.assertEqual("wechat", config.industry_source)
+        self.assertEqual(["https://rss.example.com/feed"], config.wechat_feed_urls)
+
+    def test_generic_content_feeds_are_loaded_from_config(self):
+        feeds = [
+            {"name": "公众号", "url": "https://rss.example.com/wechat.xml"},
+            {"name": "网站", "url": "https://example.com/feed.xml"},
+        ]
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(
+                json.dumps({"industry_source": "feeds", "content_feeds": feeds}),
+                encoding="utf-8",
+            )
+            config = load_config(path)
+        self.assertEqual("feeds", config.industry_source)
+        self.assertEqual(feeds, config.content_feeds)
+
+    def test_generic_content_feeds_use_configured_source_name(self):
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return """<rss><channel><title>原始名称</title><item>
+                    <title>新文章</title>
+                    <link>https://example.com/new</link>
+                    <pubDate>2026-06-30</pubDate>
+                    <description>摘要</description>
+                </item></channel></rss>""".encode()
+
+        feeds = [{"name": "配置名称", "url": "https://example.com/feed.xml"}]
+        with patch("daily_broadcast.urllib.request.urlopen", return_value=Response()):
+            news = fetch_content_feeds(feeds)
+        self.assertEqual("配置名称", news[0]["source_name"])
+
+    def test_generic_content_feed_broadcast(self):
+        config = BroadcastConfig(
+            industry_source="feeds",
+            industry_news=[
+                {
+                    "title": "网站文章",
+                    "author": "作者",
+                    "source_name": "示例网站",
+                    "published_at": "2026-06-30",
+                    "summary": "文章摘要",
+                    "url": "https://example.com/article",
+                }
+            ],
+        )
+        broadcast = build_broadcast("industry", config, date(2026, 6, 30))
+        self.assertIn("大道消息｜内容订阅", broadcast.message)
+        self.assertIn("[示例网站｜2026-06-30] 网站文章", broadcast.message)
+
+    def test_wechat_feed_fetch_skips_sent_urls(self):
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self):
+                return """<rss><channel><title>公众号</title><item>
+                    <title>新文章</title>
+                    <link>https://mp.weixin.qq.com/s/new</link>
+                    <pubDate>2026-06-29</pubDate>
+                    <description>摘要</description>
+                </item></channel></rss>""".encode()
+
+        with patch("daily_broadcast.urllib.request.urlopen", return_value=Response()):
+            news = fetch_wechat_feeds(
+                ["https://rss.example.com/feed"],
+                {"https://mp.weixin.qq.com/s/sent"},
+            )
+        self.assertEqual(["https://mp.weixin.qq.com/s/new"], [item["url"] for item in news])
+
+    def test_wechat_broadcast_uses_separate_source_and_history(self):
+        item = {
+            "title": "文章标题",
+            "author": "示例公众号",
+            "published_at": "2026-06-29",
+            "summary": "文章摘要",
+            "url": "https://mp.weixin.qq.com/s/example",
+        }
+        config = BroadcastConfig(industry_source="wechat", industry_news=[item])
+        broadcast = build_broadcast("industry", config, date(2026, 6, 26))
+        self.assertIn("大道消息｜微信公众号", broadcast.message)
+        self.assertIn("1. [示例公众号｜2026-06-29] 文章标题", broadcast.message)
+        self.assertIn("文章摘要", broadcast.message)
+        self.assertIn("原文：https://mp.weixin.qq.com/s/example", broadcast.message)
+
+        with TemporaryDirectory() as directory:
+            state_path = Path(directory) / "news-state.json"
+            save_sent_news_ids(state_path, "jike", {"jike-hash"})
+            save_sent_news_ids(state_path, "wechat", {item["url"]})
+            self.assertEqual({item["url"]}, load_sent_news_ids("wechat", state_path))
+            self.assertEqual({"jike-hash"}, load_sent_news_ids("jike", state_path))
+
+    def test_explicit_wechat_source_does_not_fall_back_to_owen(self):
+        config = BroadcastConfig(
+            industry_source="wechat",
+            wechat_feed_urls=["https://rss.example.com/feed"],
+        )
+        with TemporaryDirectory() as directory, patch(
+            "daily_broadcast.fetch_wechat_feeds",
+            return_value=[],
+        ) as fetch_wechat, patch("daily_broadcast.fetch_owen_links") as fetch_owen:
+            sent_ids = prepare_industry_news(
+                config,
+                state_path=Path(directory) / "news-state.json",
+            )
+        self.assertEqual("wechat", config.industry_source)
+        self.assertEqual([], config.industry_news)
+        self.assertEqual(set(), sent_ids)
+        fetch_wechat.assert_called_once_with(config.wechat_feed_urls, set())
+        fetch_owen.assert_not_called()
+
     def test_sent_news_urls_are_persisted(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "news-state.json"
@@ -241,6 +491,58 @@ class DailyBroadcastTest(unittest.TestCase):
         broadcast = build_broadcast("industry", BroadcastConfig(), date(2026, 6, 26))
         self.assertIn("大道消息｜即刻精选", broadcast.message)
         self.assertIn("Chrome 的即刻登录态", broadcast.message)
+
+    def test_industry_falls_back_to_owen_when_jike_is_unavailable(self):
+        config = BroadcastConfig()
+        with TemporaryDirectory() as directory, patch(
+            "daily_broadcast.fetch_owen_links",
+            return_value=[{"title": "Owen 消息", "url": "https://example.com/owen"}],
+        ) as fetch:
+            sent_ids = prepare_industry_news(
+                config,
+                state_path=Path(directory) / "news-state.json",
+            )
+        self.assertEqual("owen", config.industry_source)
+        self.assertEqual("Owen 消息", config.industry_news[0]["title"])
+        self.assertEqual(set(), sent_ids)
+        fetch.assert_called_once_with(set())
+
+    def test_industry_keeps_jike_when_unsent_items_are_available(self):
+        config = BroadcastConfig()
+        items = [
+            {
+                "author": "作者",
+                "published_at": "刚刚",
+                "content": "即刻正文",
+                "url": "https://web.okjike.com/originalPosts/example",
+            }
+        ]
+        with TemporaryDirectory() as directory:
+            items_path = Path(directory) / "items.json"
+            items_path.write_text(json.dumps(items), encoding="utf-8")
+            with patch("daily_broadcast.fetch_owen_links") as fetch:
+                prepare_industry_news(
+                    config,
+                    items_path,
+                    Path(directory) / "news-state.json",
+                )
+        self.assertEqual("jike", config.industry_source)
+        self.assertEqual(items, config.industry_news)
+        fetch.assert_not_called()
+
+    def test_industry_fallback_uses_owen_history(self):
+        config = BroadcastConfig()
+        with TemporaryDirectory() as directory:
+            state_path = Path(directory) / "news-state.json"
+            save_sent_news_ids(state_path, "jike", {"jike-hash"})
+            save_sent_news_ids(state_path, "owen", {"https://example.com/sent"})
+            with patch(
+                "daily_broadcast.fetch_owen_links",
+                return_value=[],
+            ) as fetch:
+                sent_ids = prepare_industry_news(config, state_path=state_path)
+        self.assertEqual({"https://example.com/sent"}, sent_ids)
+        fetch.assert_called_once_with({"https://example.com/sent"})
 
     def test_jike_broadcast_uses_author_time_content_and_original_url(self):
         config = BroadcastConfig(
@@ -301,7 +603,7 @@ class DailyBroadcastTest(unittest.TestCase):
                 self.assertIsNotNone(broadcast)
                 lines = broadcast.message.splitlines()
                 self.assertGreaterEqual(len(lines), 3)
-                self.assertLessEqual(len(lines), 6)
+                self.assertLessEqual(len(lines), 9 if kind == "noon" else 6)
 
     def test_countdown_uses_seven_pm_as_default_work_end(self):
         broadcast = build_broadcast(
