@@ -635,7 +635,7 @@ class DailyBroadcastTest(unittest.TestCase):
         for quote in quotes[:3]:
             self.assertIn(quote["content"], broadcast.message)
         self.assertIn(
-            load_evening_closings(EVENING_CLOSINGS_PATH)[0],
+            f"驰子，{load_evening_closings(EVENING_CLOSINGS_PATH)[0]}",
             broadcast.message,
         )
 
@@ -694,7 +694,7 @@ class DailyBroadcastTest(unittest.TestCase):
 
         broadcast = build_broadcast("evening", config, date(2026, 6, 26))
 
-        self.assertIn(EVENING_MILESTONE, broadcast.message)
+        self.assertIn(f"驰子，{EVENING_MILESTONE}", broadcast.message)
 
     def test_weekend_broadcast_is_silent(self):
         config = BroadcastConfig()

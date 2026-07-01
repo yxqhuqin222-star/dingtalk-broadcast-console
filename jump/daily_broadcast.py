@@ -842,7 +842,7 @@ def build_evening(config, day, now_time=None):
         f"{index}. {quote['content']}"
         for index, quote in enumerate(unsent, 1)
     )
-    lines.append(closing)
+    lines.append(f"驰子，{closing}")
     return Broadcast(
         "evening",
         BROADCAST_SCHEDULE["evening"],
