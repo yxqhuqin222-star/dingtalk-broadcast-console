@@ -24,6 +24,8 @@ from daily_broadcast import (
     load_config,
     load_sent_keys,
     load_sent_fact_ids,
+    load_sent_evening_closing_ids,
+    load_sent_evening_ids,
     load_sent_learning_ids,
     LEARNING_THEMES,
     format_learning_card,
@@ -36,7 +38,14 @@ from daily_broadcast import (
     save_sent_news_urls,
     save_sent_keys,
     save_sent_fact_ids,
+    save_sent_evening_closing_ids,
+    save_sent_evening_ids,
     save_sent_learning_ids,
+    evening_quote_id,
+    load_evening_closings,
+    load_evening_quotes,
+    EVENING_CLOSINGS_PATH,
+    EVENING_MILESTONE,
 )
 
 
@@ -614,12 +623,78 @@ class DailyBroadcastTest(unittest.TestCase):
         )
         self.assertIn("距下班约 1 小时 30 分钟", broadcast.message)
 
-    def test_evening_broadcast_omits_tomorrow_reminder(self):
-        config = BroadcastConfig(tomorrow_reminders=["上午同步本周重点"])
+    def test_evening_broadcast_uses_three_oldest_unsent_quotes(self):
+        quotes = load_evening_quotes(
+            "/Users/kityhello/workplace/知识库/wenxue/📚 句子控精选 (2).md"
+        )
+        config = BroadcastConfig()
         broadcast = build_broadcast("evening", config, date(2026, 6, 26))
-        self.assertIn("晚间收尾", broadcast.message)
-        self.assertIn("收工前 5 分钟", broadcast.message)
-        self.assertNotIn("明日提醒", broadcast.message)
+
+        self.assertEqual(3, len(broadcast.context["evening_ids"]))
+        self.assertEqual(["2026-06-01"] * 3, broadcast.context["evening_dates"])
+        for quote in quotes[:3]:
+            self.assertIn(quote["content"], broadcast.message)
+        self.assertIn(
+            load_evening_closings(EVENING_CLOSINGS_PATH)[0],
+            broadcast.message,
+        )
+
+    def test_evening_broadcast_skips_sent_quotes_and_crosses_dates(self):
+        quotes = load_evening_quotes(
+            "/Users/kityhello/workplace/知识库/wenxue/📚 句子控精选 (2).md"
+        )
+        june_first = [quote for quote in quotes if quote["date"] == "2026-06-01"]
+        config = BroadcastConfig(
+            sent_evening_ids={
+                evening_quote_id(quote["content"])
+                for quote in june_first[:-2]
+            }
+        )
+
+        broadcast = build_broadcast("evening", config, date(2026, 6, 26))
+
+        self.assertEqual(
+            ["2026-06-01", "2026-06-01", "2026-06-03"],
+            broadcast.context["evening_dates"],
+        )
+
+    def test_evening_sent_ids_share_state_file(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            save_sent_keys(path, {"2026-06-26:morning"})
+            save_sent_evening_ids(path, {"quote-id"})
+            save_sent_evening_closing_ids(path, {"closing-id"})
+
+            self.assertEqual({"quote-id"}, load_sent_evening_ids(path))
+            self.assertEqual(
+                {"closing-id"},
+                load_sent_evening_closing_ids(path),
+            )
+            self.assertEqual({"2026-06-26:morning"}, load_sent_keys(path))
+
+    def test_evening_closing_changes_after_sent(self):
+        closings = load_evening_closings(EVENING_CLOSINGS_PATH)
+        config = BroadcastConfig(
+            sent_evening_closing_ids={evening_quote_id(closings[0])}
+        )
+
+        broadcast = build_broadcast("evening", config, date(2026, 6, 26))
+
+        self.assertIn(closings[1], broadcast.message)
+        self.assertNotIn(closings[0], broadcast.message)
+
+    def test_evening_uses_milestone_after_100_closings(self):
+        closings = load_evening_closings(EVENING_CLOSINGS_PATH)
+        config = BroadcastConfig(
+            sent_evening_closing_ids={
+                evening_quote_id(closing)
+                for closing in closings
+            }
+        )
+
+        broadcast = build_broadcast("evening", config, date(2026, 6, 26))
+
+        self.assertIn(EVENING_MILESTONE, broadcast.message)
 
     def test_weekend_broadcast_is_silent(self):
         config = BroadcastConfig()

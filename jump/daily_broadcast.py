@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import ssl
 import urllib.parse
 import urllib.request
@@ -27,6 +28,11 @@ BROADCAST_SCHEDULE = {
 }
 DEFAULT_STATE_PATH = Path(__file__).with_name(".daily_broadcast_state.json")
 DEFAULT_NEWS_STATE_PATH = Path(__file__).with_name(".dadao_message_state.json")
+EVENING_QUOTES_PATH = Path(
+    "/Users/kityhello/workplace/知识库/wenxue/📚 句子控精选 (2).md"
+)
+EVENING_CLOSINGS_PATH = Path(__file__).with_name("evening_closings.txt")
+EVENING_MILESTONE = "小猪播报100天了～！"
 OWEN_LINKS_URL = "https://www.owenyoung.com/links"
 JIKE_SELECTED_URL = "https://web.okjike.com/topic/63579abb6724cc583b9bba9a/selected"
 DEFAULT_DADAO_SOURCE = "jike"
@@ -294,6 +300,8 @@ class BroadcastConfig:
     sent_fact_ids: dict[str, set[str]] = field(
         default_factory=lambda: {"psychology": set(), "history": set()}
     )
+    sent_evening_ids: set[str] = field(default_factory=set)
+    sent_evening_closing_ids: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -804,12 +812,50 @@ def build_countdown(config, day, now_time=None):
 
 
 def build_evening(config, day, now_time=None):
-    lines = [
-        "晚间收尾。",
-        "今天辛苦了，可以给自己留一个清爽的断点。",
-        "收工前 5 分钟，把明早第一步写下来就很好。",
-    ]
-    return Broadcast("evening", BROADCAST_SCHEDULE["evening"], format_message(config, lines), {"reminders": config.tomorrow_reminders[:3]})
+    quotes = load_evening_quotes(EVENING_QUOTES_PATH)
+    unsent = [
+        quote
+        for quote in quotes
+        if evening_quote_id(quote["content"]) not in config.sent_evening_ids
+    ][:3]
+    if len(unsent) < 3:
+        raise ValueError("晚间句子库剩余内容不足 3 条，已取消播报。")
+    closings = load_evening_closings(EVENING_CLOSINGS_PATH)
+    closing = next(
+        (
+            item
+            for item in closings
+            if evening_quote_id(item) not in config.sent_evening_closing_ids
+        ),
+        None,
+    )
+    if (
+        closing is None
+        and evening_quote_id(EVENING_MILESTONE)
+        not in config.sent_evening_closing_ids
+    ):
+        closing = EVENING_MILESTONE
+    if closing is None:
+        raise ValueError("晚间下班文案已全部播报完毕，请补充新内容。")
+    lines = ["晚间收尾。"]
+    lines.extend(
+        f"{index}. {quote['content']}"
+        for index, quote in enumerate(unsent, 1)
+    )
+    lines.append(closing)
+    return Broadcast(
+        "evening",
+        BROADCAST_SCHEDULE["evening"],
+        format_message(config, lines),
+        {
+            "evening_ids": [
+                evening_quote_id(quote["content"])
+                for quote in unsent
+            ],
+            "evening_dates": [quote["date"] for quote in unsent],
+            "evening_closing_id": evening_quote_id(closing),
+        },
+    )
 
 
 BUILDERS = {
@@ -905,6 +951,78 @@ def load_sent_learning_ids(path):
     }
 
 
+def load_sent_evening_ids(path):
+    path = Path(path)
+    if not path.exists():
+        return set()
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return set(data.get("sent_evening_ids", []))
+
+
+def save_sent_evening_ids(path, sent_evening_ids):
+    path = Path(path)
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    data["sent_evening_ids"] = sorted(sent_evening_ids)
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def load_sent_evening_closing_ids(path):
+    path = Path(path)
+    if not path.exists():
+        return set()
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return set(data.get("sent_evening_closing_ids", []))
+
+
+def save_sent_evening_closing_ids(path, sent_evening_closing_ids):
+    path = Path(path)
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    data["sent_evening_closing_ids"] = sorted(sent_evening_closing_ids)
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def load_evening_quotes(path):
+    path = Path(path)
+    sections = []
+    current_date = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        heading = re.match(r"^## (\d{4}-\d{2}-\d{2})\b", line)
+        if heading:
+            current_date = heading.group(1)
+            continue
+        quote = re.match(r"^\d+\.\s+(.+)$", line)
+        if current_date and quote:
+            sections.append(
+                {
+                    "date": current_date,
+                    "content": " ".join(quote.group(1).split()),
+                }
+            )
+    return sorted(sections, key=lambda item: item["date"])
+
+
+def load_evening_closings(path):
+    closings = [
+        " ".join(line.split())
+        for line in Path(path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if len(closings) != 100 or len(set(closings)) != 100:
+        raise ValueError("晚间下班文案必须包含 100 条不重复内容。")
+    return closings
+
+
+def evening_quote_id(content):
+    normalized = " ".join(content.split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
 def save_sent_learning_ids(path, sent_learning_ids):
     path = Path(path)
     data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
@@ -921,6 +1039,13 @@ def save_sent_learning_ids(path, sent_learning_ids):
 def record_learning_card(config, broadcast):
     for kind, value in broadcast.context.get("learning_keys", {}).items():
         config.sent_learning_ids[kind].add(value)
+
+
+def record_evening_quotes(config, broadcast):
+    config.sent_evening_ids.update(broadcast.context.get("evening_ids", []))
+    closing_id = broadcast.context.get("evening_closing_id")
+    if closing_id:
+        config.sent_evening_closing_ids.add(closing_id)
 
 
 def validate_jike_item(item):
@@ -1090,6 +1215,8 @@ def main():
         sent_keys = load_sent_keys(args.state)
         config.sent_fact_ids = load_sent_fact_ids(args.state)
         config.sent_learning_ids = load_sent_learning_ids(args.state)
+        config.sent_evening_ids = load_sent_evening_ids(args.state)
+        config.sent_evening_closing_ids = load_sent_evening_closing_ids(args.state)
         sent_news_ids = set()
         industry_key = f"{day.isoformat()}:industry"
         if (
@@ -1122,15 +1249,23 @@ def main():
                         broadcast.context["fact_id"]
                     )
                 record_learning_card(config, broadcast)
+                record_evening_quotes(config, broadcast)
                 sent_keys.add(key)
         if args.send:
             save_sent_keys(args.state, sent_keys)
             save_sent_fact_ids(args.state, config.sent_fact_ids)
             save_sent_learning_ids(args.state, config.sent_learning_ids)
+            save_sent_evening_ids(args.state, config.sent_evening_ids)
+            save_sent_evening_closing_ids(
+                args.state,
+                config.sent_evening_closing_ids,
+            )
         return
 
     config.sent_fact_ids = load_sent_fact_ids(args.state)
     config.sent_learning_ids = load_sent_learning_ids(args.state)
+    config.sent_evening_ids = load_sent_evening_ids(args.state)
+    config.sent_evening_closing_ids = load_sent_evening_closing_ids(args.state)
     sent_news_ids = set()
     if args.kind == "industry" and config.enabled.get("industry", False):
         sent_news_ids = prepare_industry_news(config, args.items_file)
@@ -1158,7 +1293,13 @@ def main():
             )
             save_sent_fact_ids(args.state, config.sent_fact_ids)
         record_learning_card(config, broadcast)
+        record_evening_quotes(config, broadcast)
         save_sent_learning_ids(args.state, config.sent_learning_ids)
+        save_sent_evening_ids(args.state, config.sent_evening_ids)
+        save_sent_evening_closing_ids(
+            args.state,
+            config.sent_evening_closing_ids,
+        )
 
 
 if __name__ == "__main__":
