@@ -26,6 +26,7 @@ from daily_broadcast import (
     load_sent_fact_ids,
     load_sent_evening_closing_ids,
     load_sent_evening_ids,
+    load_sent_countdown_ids,
     load_sent_learning_ids,
     LEARNING_THEMES,
     format_learning_card,
@@ -40,10 +41,14 @@ from daily_broadcast import (
     save_sent_fact_ids,
     save_sent_evening_closing_ids,
     save_sent_evening_ids,
+    save_sent_countdown_ids,
     save_sent_learning_ids,
     evening_quote_id,
     load_evening_closings,
     load_evening_quotes,
+    load_countdown_experiences,
+    COUNTDOWN_EXPERIENCES_PATH,
+    COUNTDOWN_MODULES,
     EVENING_CLOSINGS_PATH,
     EVENING_MILESTONE,
 )
@@ -61,6 +66,40 @@ class DailyBroadcastTest(unittest.TestCase):
         self.assertIn("心理学冷知识：", broadcast.message)
         self.assertNotIn("今日提醒", broadcast.message)
         self.assertEqual("psychology", broadcast.context["fact_category"])
+        self.assertEqual(1, len(broadcast.context["evening_ids"]))
+
+    def test_morning_excerpt_skips_sent_literature(self):
+        quotes = load_evening_quotes(
+            "/Users/kityhello/workplace/知识库/wenxue/📚 句子控精选 (2).md"
+        )
+        config = BroadcastConfig(
+            weather="晴",
+            sent_evening_ids={evening_quote_id(quotes[0]["content"])},
+        )
+
+        broadcast = build_broadcast("morning", config, date(2026, 7, 2))
+
+        self.assertNotIn(quotes[0]["content"], broadcast.message)
+        self.assertIn(quotes[1]["content"], broadcast.message)
+
+    def test_due_morning_and_evening_do_not_share_literature(self):
+        config = BroadcastConfig(weather="晴")
+        sent = {
+            "2026-07-02:noon",
+            "2026-07-02:industry",
+            "2026-07-02:countdown",
+        }
+
+        due = due_broadcasts(
+            config,
+            datetime(2026, 7, 2, 19, 0),
+            sent,
+        )
+        broadcasts = {broadcast.kind: broadcast for _, broadcast in due}
+
+        morning_ids = set(broadcasts["morning"].context["evening_ids"])
+        evening_ids = set(broadcasts["evening"].context["evening_ids"])
+        self.assertTrue(morning_ids.isdisjoint(evening_ids))
 
     def test_noon_broadcast_is_a_weekly_learning_card(self):
         config = BroadcastConfig()
@@ -198,7 +237,7 @@ class DailyBroadcastTest(unittest.TestCase):
         self.assertIn("早安，冯驰。", morning.message)
         self.assertIn("北京天气：晴，当前 26℃，今日 20～30℃，降水概率 10%", morning.message)
         self.assertIn("今日摘抄：", morning.message)
-        self.assertIn("——史铁生《我与地坛》", morning.message)
+        self.assertEqual(1, len(morning.context["evening_ids"]))
         self.assertNotIn("摸鱼指数", morning.message)
         self.assertNotIn("moyu_score", morning.context)
 
@@ -612,7 +651,8 @@ class DailyBroadcastTest(unittest.TestCase):
                 self.assertIsNotNone(broadcast)
                 lines = broadcast.message.splitlines()
                 self.assertGreaterEqual(len(lines), 3)
-                self.assertLessEqual(len(lines), 9 if kind == "noon" else 6)
+                maximum = 9 if kind in ("noon", "countdown") else 6
+                self.assertLessEqual(len(lines), maximum)
 
     def test_countdown_uses_seven_pm_as_default_work_end(self):
         broadcast = build_broadcast(
@@ -622,6 +662,67 @@ class DailyBroadcastTest(unittest.TestCase):
             now_time=datetime(2026, 6, 26, 17, 30).time(),
         )
         self.assertIn("距下班约 1 小时 30 分钟", broadcast.message)
+
+    def test_countdown_contains_all_five_experience_modules(self):
+        broadcast = build_broadcast(
+            "countdown",
+            BroadcastConfig(),
+            date(2026, 7, 2),
+            now_time=datetime(2026, 7, 2, 17, 30).time(),
+        )
+
+        for module in COUNTDOWN_MODULES:
+            self.assertIn(f"{module}：", broadcast.message)
+        self.assertEqual(
+            set(COUNTDOWN_MODULES),
+            set(broadcast.context["countdown_ids"]),
+        )
+
+    def test_countdown_has_100_unique_items_per_module(self):
+        experiences = load_countdown_experiences(COUNTDOWN_EXPERIENCES_PATH)
+
+        for module in COUNTDOWN_MODULES:
+            with self.subTest(module=module):
+                self.assertEqual(100, len(experiences[module]))
+                self.assertEqual(100, len(set(experiences[module])))
+
+    def test_countdown_skips_sent_content(self):
+        experiences = load_countdown_experiences(COUNTDOWN_EXPERIENCES_PATH)
+        config = BroadcastConfig()
+        for module in COUNTDOWN_MODULES:
+            config.sent_countdown_ids[module].add(
+                evening_quote_id(experiences[module][0])
+            )
+
+        broadcast = build_broadcast(
+            "countdown",
+            config,
+            date(2026, 7, 2),
+            now_time=datetime(2026, 7, 2, 17, 30).time(),
+        )
+
+        for module in COUNTDOWN_MODULES:
+            self.assertNotIn(
+                f"{module}：{experiences[module][0]}",
+                broadcast.message,
+            )
+            self.assertIn(
+                f"{module}：{experiences[module][1]}",
+                broadcast.message,
+            )
+
+    def test_countdown_sent_ids_share_state_file(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            expected = {
+                module: {f"{module}-id"}
+                for module in COUNTDOWN_MODULES
+            }
+            save_sent_keys(path, {"2026-07-02:morning"})
+            save_sent_countdown_ids(path, expected)
+
+            self.assertEqual(expected, load_sent_countdown_ids(path))
+            self.assertEqual({"2026-07-02:morning"}, load_sent_keys(path))
 
     def test_evening_broadcast_uses_three_oldest_unsent_quotes(self):
         quotes = load_evening_quotes(

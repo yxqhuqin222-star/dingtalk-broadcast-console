@@ -33,6 +33,16 @@ EVENING_QUOTES_PATH = Path(
 )
 EVENING_CLOSINGS_PATH = Path(__file__).with_name("evening_closings.txt")
 EVENING_MILESTONE = "小猪播报100天了～！"
+COUNTDOWN_EXPERIENCES_PATH = Path(__file__).with_name(
+    "countdown_experiences.json"
+)
+COUNTDOWN_MODULES = (
+    "情绪温度",
+    "办公室观察题",
+    "一分钟放空",
+    "今日小问题",
+    "下班通行证",
+)
 OWEN_LINKS_URL = "https://www.owenyoung.com/links"
 JIKE_SELECTED_URL = "https://web.okjike.com/topic/63579abb6724cc583b9bba9a/selected"
 DEFAULT_DADAO_SOURCE = "jike"
@@ -238,14 +248,6 @@ LEARNING_THEMES = [
         ],
     },
 ]
-MORNING_EXCERPTS = [
-    (
-        "“譬如祭坛石门中的落日，寂静的光辉平铺的一刻，地上的每一个坎坷都被映照得灿烂；"
-        "譬如在园中最为落寞的时间，一群雨燕便出来高歌，把天地都叫喊得苍凉。”\n"
-        "——史铁生《我与地坛》"
-    ),
-]
-
 WEATHER_CODE_LABELS = {
     0: "晴",
     1: "大部晴朗",
@@ -302,6 +304,9 @@ class BroadcastConfig:
     )
     sent_evening_ids: set[str] = field(default_factory=set)
     sent_evening_closing_ids: set[str] = field(default_factory=set)
+    sent_countdown_ids: dict[str, set[str]] = field(
+        default_factory=lambda: {module: set() for module in COUNTDOWN_MODULES}
+    )
 
 
 @dataclass
@@ -709,17 +714,33 @@ def next_weekend_days(day):
 
 def build_morning(config, day, now_time=None):
     reminder = holiday_line(config, day)
+    excerpt = next(
+        (
+            quote
+            for quote in load_evening_quotes(EVENING_QUOTES_PATH)
+            if evening_quote_id(quote["content"]) not in config.sent_evening_ids
+        ),
+        None,
+    )
+    if excerpt is None:
+        raise ValueError("文学句子库已全部播报完毕，请补充新内容。")
     message = format_message(config, [
         "早安，冯驰。",
         weather_line(config),
         reminder,
         "今日摘抄：",
-        stable_pick(MORNING_EXCERPTS, day, "morning-excerpt"),
+        excerpt["content"],
     ])
-    context = {}
+    context = {"evening_ids": [evening_quote_id(excerpt["content"])]}
     if reminder.startswith("心理学冷知识："):
         fact = reminder.removeprefix("心理学冷知识：")
-        context = {"fact": fact, "fact_category": "psychology", "fact_id": fact_id(fact)}
+        context.update(
+            {
+                "fact": fact,
+                "fact_category": "psychology",
+                "fact_id": fact_id(fact),
+            }
+        )
     return Broadcast("morning", BROADCAST_SCHEDULE["morning"], message, context)
 
 
@@ -794,21 +815,40 @@ def build_countdown(config, day, now_time=None):
     end_dt = datetime.combine(day, config.work_end)
     minutes = max(0, int((end_dt - now_dt).total_seconds() // 60))
     weekend_days = next_weekend_days(day)
-    holiday = "今日进度：普通工作日，继续稳步收尾"
-    if config.holiday_name:
-        holiday = f"今日提醒：{config.holiday_name}"
-    elif config.next_holiday_date:
-        days = (config.next_holiday_date - day).days
-        if days >= 0:
-            holiday = f"假期雷达：距{config.next_holiday_name}还有 {days} 天"
+    experiences = load_countdown_experiences(COUNTDOWN_EXPERIENCES_PATH)
+    selected = {}
+    for module in COUNTDOWN_MODULES:
+        selected[module] = next(
+            (
+                content
+                for content in experiences[module]
+                if fact_id(content) not in config.sent_countdown_ids[module]
+            ),
+            None,
+        )
+        if selected[module] is None:
+            raise ValueError(f"{module}文案已全部播报完毕，请补充新内容。")
     lines = [
         "摸鱼日历。",
         f"距下班约 {minutes // 60} 小时 {minutes % 60} 分钟。",
         f"距周末还有 {weekend_days} 天。",
-        holiday,
-        "稳住，今天已经进入后半程。",
     ]
-    return Broadcast("countdown", BROADCAST_SCHEDULE["countdown"], format_message(config, lines), {"minutes_to_off": minutes})
+    lines.extend(
+        f"{module}：{selected[module]}"
+        for module in COUNTDOWN_MODULES
+    )
+    return Broadcast(
+        "countdown",
+        BROADCAST_SCHEDULE["countdown"],
+        format_message(config, lines),
+        {
+            "minutes_to_off": minutes,
+            "countdown_ids": {
+                module: fact_id(content)
+                for module, content in selected.items()
+            },
+        },
+    )
 
 
 def build_evening(config, day, now_time=None):
@@ -893,6 +933,9 @@ def due_broadcasts(config, now=None, sent_keys=None):
             broadcast = build_broadcast(kind, config, now.date(), now.time())
             if broadcast:
                 result.append((key, broadcast))
+                config.sent_evening_ids.update(
+                    broadcast.context.get("evening_ids", [])
+                )
     return result
 
 
@@ -987,6 +1030,31 @@ def save_sent_evening_closing_ids(path, sent_evening_closing_ids):
     )
 
 
+def load_sent_countdown_ids(path):
+    path = Path(path)
+    if not path.exists():
+        return {module: set() for module in COUNTDOWN_MODULES}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    sent = data.get("sent_countdown_ids", {})
+    return {
+        module: set(sent.get(module, []))
+        for module in COUNTDOWN_MODULES
+    }
+
+
+def save_sent_countdown_ids(path, sent_countdown_ids):
+    path = Path(path)
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    data["sent_countdown_ids"] = {
+        module: sorted(sent_countdown_ids[module])
+        for module in COUNTDOWN_MODULES
+    }
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
 def load_evening_quotes(path):
     path = Path(path)
     sections = []
@@ -1018,6 +1086,29 @@ def load_evening_closings(path):
     return closings
 
 
+def load_countdown_experiences(path):
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    experiences = {}
+    for module in COUNTDOWN_MODULES:
+        item = data.get(module, {})
+        starts = item.get("starts", [])
+        ends = item.get("ends", [])
+        content = [
+            f"{start}{end}"
+            for start in starts
+            for end in ends
+        ]
+        if len(starts) != 10 or len(ends) != 10 or len(set(content)) != 100:
+            raise ValueError(f"{module}必须生成 100 条不重复文案。")
+        experiences[module] = sorted(
+            content,
+            key=lambda value: hashlib.sha256(
+                f"{module}:{value}".encode("utf-8")
+            ).hexdigest(),
+        )
+    return experiences
+
+
 def evening_quote_id(content):
     normalized = " ".join(content.split())
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
@@ -1046,6 +1137,11 @@ def record_evening_quotes(config, broadcast):
     closing_id = broadcast.context.get("evening_closing_id")
     if closing_id:
         config.sent_evening_closing_ids.add(closing_id)
+
+
+def record_countdown_content(config, broadcast):
+    for module, content_id in broadcast.context.get("countdown_ids", {}).items():
+        config.sent_countdown_ids[module].add(content_id)
 
 
 def validate_jike_item(item):
@@ -1217,6 +1313,7 @@ def main():
         config.sent_learning_ids = load_sent_learning_ids(args.state)
         config.sent_evening_ids = load_sent_evening_ids(args.state)
         config.sent_evening_closing_ids = load_sent_evening_closing_ids(args.state)
+        config.sent_countdown_ids = load_sent_countdown_ids(args.state)
         sent_news_ids = set()
         industry_key = f"{day.isoformat()}:industry"
         if (
@@ -1250,6 +1347,7 @@ def main():
                     )
                 record_learning_card(config, broadcast)
                 record_evening_quotes(config, broadcast)
+                record_countdown_content(config, broadcast)
                 sent_keys.add(key)
         if args.send:
             save_sent_keys(args.state, sent_keys)
@@ -1260,12 +1358,14 @@ def main():
                 args.state,
                 config.sent_evening_closing_ids,
             )
+            save_sent_countdown_ids(args.state, config.sent_countdown_ids)
         return
 
     config.sent_fact_ids = load_sent_fact_ids(args.state)
     config.sent_learning_ids = load_sent_learning_ids(args.state)
     config.sent_evening_ids = load_sent_evening_ids(args.state)
     config.sent_evening_closing_ids = load_sent_evening_closing_ids(args.state)
+    config.sent_countdown_ids = load_sent_countdown_ids(args.state)
     sent_news_ids = set()
     if args.kind == "industry" and config.enabled.get("industry", False):
         sent_news_ids = prepare_industry_news(config, args.items_file)
@@ -1294,12 +1394,14 @@ def main():
             save_sent_fact_ids(args.state, config.sent_fact_ids)
         record_learning_card(config, broadcast)
         record_evening_quotes(config, broadcast)
+        record_countdown_content(config, broadcast)
         save_sent_learning_ids(args.state, config.sent_learning_ids)
         save_sent_evening_ids(args.state, config.sent_evening_ids)
         save_sent_evening_closing_ids(
             args.state,
             config.sent_evening_closing_ids,
         )
+        save_sent_countdown_ids(args.state, config.sent_countdown_ids)
 
 
 if __name__ == "__main__":
