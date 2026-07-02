@@ -46,6 +46,8 @@ from daily_broadcast import (
     evening_quote_id,
     load_evening_closings,
     load_evening_quotes,
+    load_literature_quotes,
+    load_numbered_quotes,
     load_countdown_experiences,
     COUNTDOWN_EXPERIENCES_PATH,
     COUNTDOWN_MODULES,
@@ -81,6 +83,42 @@ class DailyBroadcastTest(unittest.TestCase):
 
         self.assertNotIn(quotes[0]["content"], broadcast.message)
         self.assertIn(quotes[1]["content"], broadcast.message)
+
+    def test_numbered_quotes_are_loaded_in_number_order(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "冬牧场-划线.md"
+            path.write_text(
+                "# 《冬牧场》划线\n\n1. 第一句\n\n2. 第二句\n",
+                encoding="utf-8",
+            )
+
+            quotes = load_numbered_quotes(path)
+
+        self.assertEqual(["第一句", "第二句"], [quote["content"] for quote in quotes])
+        self.assertEqual(["冬牧场-划线"] * 2, [quote["date"] for quote in quotes])
+
+    def test_literature_quotes_switch_to_numbered_fallback(self):
+        with TemporaryDirectory() as directory:
+            primary = Path(directory) / "primary.md"
+            fallback = Path(directory) / "fallback.md"
+            primary.write_text(
+                "## 2026-07-01\n\n1. 句子控最后一句\n",
+                encoding="utf-8",
+            )
+            fallback.write_text(
+                "# 《冬牧场》划线\n\n1. 冬牧场第一句\n\n2. 冬牧场第二句\n",
+                encoding="utf-8",
+            )
+            with patch("daily_broadcast.EVENING_QUOTES_PATH", primary), patch(
+                "daily_broadcast.EVENING_QUOTES_FALLBACK_PATH",
+                fallback,
+            ):
+                quotes = load_literature_quotes()
+
+        self.assertEqual(
+            ["句子控最后一句", "冬牧场第一句", "冬牧场第二句"],
+            [quote["content"] for quote in quotes],
+        )
 
     def test_due_morning_and_evening_do_not_share_literature(self):
         config = BroadcastConfig(weather="晴")

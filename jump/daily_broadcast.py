@@ -31,6 +31,9 @@ DEFAULT_NEWS_STATE_PATH = Path(__file__).with_name(".dadao_message_state.json")
 EVENING_QUOTES_PATH = Path(
     "/Users/kityhello/workplace/知识库/wenxue/📚 句子控精选 (2).md"
 )
+EVENING_QUOTES_FALLBACK_PATH = Path(
+    "/Users/kityhello/workplace/知识库/wenxue/冬牧场-划线.md"
+)
 EVENING_CLOSINGS_PATH = Path(__file__).with_name("evening_closings.txt")
 EVENING_MILESTONE = "小猪播报100天了～！"
 COUNTDOWN_EXPERIENCES_PATH = Path(__file__).with_name(
@@ -717,7 +720,7 @@ def build_morning(config, day, now_time=None):
     excerpt = next(
         (
             quote
-            for quote in load_evening_quotes(EVENING_QUOTES_PATH)
+            for quote in load_literature_quotes()
             if evening_quote_id(quote["content"]) not in config.sent_evening_ids
         ),
         None,
@@ -852,7 +855,7 @@ def build_countdown(config, day, now_time=None):
 
 
 def build_evening(config, day, now_time=None):
-    quotes = load_evening_quotes(EVENING_QUOTES_PATH)
+    quotes = load_literature_quotes()
     unsent = [
         quote
         for quote in quotes
@@ -1073,6 +1076,28 @@ def load_evening_quotes(path):
                 }
             )
     return sorted(sections, key=lambda item: item["date"])
+
+
+def load_numbered_quotes(path):
+    path = Path(path)
+    quotes = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        quote = re.match(r"^\d+\.\s+(.+)$", line)
+        if quote:
+            quotes.append(
+                {
+                    "date": path.stem,
+                    "content": " ".join(quote.group(1).split()),
+                }
+            )
+    return quotes
+
+
+def load_literature_quotes():
+    return [
+        *load_evening_quotes(EVENING_QUOTES_PATH),
+        *load_numbered_quotes(EVENING_QUOTES_FALLBACK_PATH),
+    ]
 
 
 def load_evening_closings(path):
