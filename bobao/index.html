@@ -373,7 +373,6 @@
     const globalStatus = document.querySelector("#globalStatus");
 
     let editingRuleId = null;
-    let fixedFileSelected = false;
     let rules = loadRules();
 
     if (window.location.protocol === "file:") {
@@ -381,9 +380,9 @@
     }
 
     renderRules();
+    refreshPreviews();
 
     selectFixedFile.addEventListener("click", async () => {
-      fixedFileSelected = true;
       fileStatus.textContent = "demo.csv · 正在读取";
       setStatus("", "正在按已制定规则计算汇总量...");
       await refreshPreviews();
@@ -655,7 +654,7 @@
     }
 
     function currentFile() {
-      return fixedFileSelected ? { name: "demo.csv" } : null;
+      return { name: "demo.csv" };
     }
 
     function setStatus(className, text) {
