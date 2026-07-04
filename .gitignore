@@ -4,6 +4,7 @@ __pycache__/
 .env
 .env.local
 .daily_broadcast_state.json
+.learning_inventory.json
 .dadao_message_state.json
 .wechat_monitor_state.json
 bobao/server.log

@@ -1,7 +1,7 @@
 import json
 import unittest
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -57,6 +57,22 @@ from daily_broadcast import (
 
 
 class DailyBroadcastTest(unittest.TestCase):
+    def setUp(self):
+        self.inventory_patch = patch(
+            "daily_broadcast.load_inventory",
+            return_value={
+                "cards": [],
+                "sent_urls": [],
+                "last_category": "",
+                "last_refresh_at": "",
+                "last_error": "",
+            },
+        )
+        self.inventory_patch.start()
+
+    def tearDown(self):
+        self.inventory_patch.stop()
+
     def test_broadcast_schedule_uses_configured_times(self):
         self.assertEqual("10:00", BROADCAST_SCHEDULE["morning"])
         self.assertEqual("11:40", BROADCAST_SCHEDULE["noon"])
@@ -68,11 +84,11 @@ class DailyBroadcastTest(unittest.TestCase):
         self.assertIn("心理学冷知识：", broadcast.message)
         self.assertNotIn("今日提醒", broadcast.message)
         self.assertEqual("psychology", broadcast.context["fact_category"])
-        self.assertEqual(1, len(broadcast.context["evening_ids"]))
+        self.assertEqual(3, len(broadcast.context["evening_ids"]))
 
     def test_morning_excerpt_skips_sent_literature(self):
         quotes = load_evening_quotes(
-            "/Users/kityhello/workplace/知识库/wenxue/📚 句子控精选 (2).md"
+            "/Users/kityhello/workplace/tech-docs/wenxue/📚 句子控精选 (2).md"
         )
         config = BroadcastConfig(
             weather="晴",
@@ -82,7 +98,8 @@ class DailyBroadcastTest(unittest.TestCase):
         broadcast = build_broadcast("morning", config, date(2026, 7, 2))
 
         self.assertNotIn(quotes[0]["content"], broadcast.message)
-        self.assertIn(quotes[1]["content"], broadcast.message)
+        for index, quote in enumerate(quotes[1:4], 1):
+            self.assertIn(f"{index}. {quote['content']}", broadcast.message)
 
     def test_numbered_quotes_are_loaded_in_number_order(self):
         with TemporaryDirectory() as directory:
@@ -139,15 +156,45 @@ class DailyBroadcastTest(unittest.TestCase):
         evening_ids = set(broadcasts["evening"].context["evening_ids"])
         self.assertTrue(morning_ids.isdisjoint(evening_ids))
 
-    def test_noon_broadcast_is_a_weekly_learning_card(self):
+    def test_noon_broadcast_rotates_categories_each_workday(self):
         config = BroadcastConfig()
-        for day_number in range(22, 27):
-            with self.subTest(day_number=day_number):
-                broadcast = build_broadcast("noon", config, date(2026, 6, day_number))
-                self.assertIn("三分钟知识卡", broadcast.message)
-                self.assertIn(f"（{day_number - 21}/5）", broadcast.message)
-                self.assertIn("来源：", broadcast.message)
-                self.assertIn("预计阅读：3 分钟", broadcast.message)
+        theme_ids = []
+        day = date(2026, 6, 22)
+        while len(theme_ids) < 10:
+            if day.weekday() < 5:
+                with self.subTest(day=day):
+                    broadcast = build_broadcast("noon", config, day)
+                    self.assertIn("三分钟知识卡", broadcast.message)
+                    self.assertIn("来源：", broadcast.message)
+                    self.assertIn("预计阅读：3 分钟", broadcast.message)
+                    theme_ids.append(broadcast.context["theme_id"])
+            day += timedelta(days=1)
+        self.assertEqual(len(theme_ids), len(set(theme_ids)))
+
+    def test_noon_prefers_dynamic_inventory_card(self):
+        dynamic_card = {
+            "category": "健康",
+            "title": "测试标题",
+            "summary": "测试摘要",
+            "source": "WHO",
+            "source_url": "https://example.com/health",
+            "published_at": "2026-07-03",
+        }
+        with patch(
+            "daily_broadcast.load_inventory",
+            return_value={
+                "cards": [dynamic_card],
+                "sent_urls": [],
+                "last_category": "科学",
+            },
+        ):
+            broadcast = build_broadcast(
+                "noon",
+                BroadcastConfig(),
+                date(2026, 7, 6),
+            )
+        self.assertEqual("健康", broadcast.context["theme_id"])
+        self.assertIn("来源：WHO https://example.com/health", broadcast.message)
 
     def test_psychology_fact_does_not_repeat_sent_content(self):
         config = BroadcastConfig(weather="晴")
@@ -188,16 +235,16 @@ class DailyBroadcastTest(unittest.TestCase):
         message = format_learning_card(theme, card, date(2026, 6, 22))
         self.assertFalse(validate_learning_card(theme, card, message))
 
-    def test_learning_card_includes_yesterday_review_after_monday(self):
+    def test_learning_card_does_not_repeat_yesterday_review(self):
         config = BroadcastConfig()
         monday = build_broadcast("noon", config, date(2026, 6, 22))
         tuesday = build_broadcast("noon", config, date(2026, 6, 23))
         self.assertNotIn("昨日回响：", monday.message)
-        self.assertIn("昨日回响：", tuesday.message)
+        self.assertNotIn("昨日回响：", tuesday.message)
 
-    def test_friday_learning_card_is_weekly_summary(self):
+    def test_friday_learning_card_is_not_forced_to_weekly_summary(self):
         broadcast = build_broadcast("noon", BroadcastConfig(), date(2026, 6, 26))
-        self.assertIn("本周知识拼图", broadcast.message)
+        self.assertNotIn("本周知识拼图", broadcast.message)
 
     def test_learning_card_uses_three_level_deduplication(self):
         day = date(2026, 6, 22)
@@ -207,7 +254,15 @@ class DailyBroadcastTest(unittest.TestCase):
             duplicate_config = BroadcastConfig()
             duplicate_config.sent_learning_ids[kind].add(value)
             with self.subTest(kind=kind):
-                self.assertIsNone(build_broadcast("noon", duplicate_config, day))
+                duplicate = build_broadcast("noon", duplicate_config, day)
+                if kind == "dates":
+                    self.assertIsNone(duplicate)
+                else:
+                    self.assertIsNotNone(duplicate)
+                    self.assertNotEqual(
+                        first.context["learning_keys"]["theme_slots"],
+                        duplicate.context["learning_keys"]["theme_slots"],
+                    )
 
     def test_learning_state_is_persisted_without_losing_other_state(self):
         with TemporaryDirectory() as directory:
@@ -275,7 +330,7 @@ class DailyBroadcastTest(unittest.TestCase):
         self.assertIn("早安，冯驰。", morning.message)
         self.assertIn("北京天气：晴，当前 26℃，今日 20～30℃，降水概率 10%", morning.message)
         self.assertIn("今日摘抄：", morning.message)
-        self.assertEqual(1, len(morning.context["evening_ids"]))
+        self.assertEqual(3, len(morning.context["evening_ids"]))
         self.assertNotIn("摸鱼指数", morning.message)
         self.assertNotIn("moyu_score", morning.context)
 
@@ -689,7 +744,7 @@ class DailyBroadcastTest(unittest.TestCase):
                 self.assertIsNotNone(broadcast)
                 lines = broadcast.message.splitlines()
                 self.assertGreaterEqual(len(lines), 3)
-                maximum = 9 if kind in ("noon", "countdown") else 6
+                maximum = 9 if kind in ("noon", "countdown") else 7 if kind == "morning" else 6
                 self.assertLessEqual(len(lines), maximum)
 
     def test_countdown_uses_seven_pm_as_default_work_end(self):
@@ -764,7 +819,7 @@ class DailyBroadcastTest(unittest.TestCase):
 
     def test_evening_broadcast_uses_three_oldest_unsent_quotes(self):
         quotes = load_evening_quotes(
-            "/Users/kityhello/workplace/知识库/wenxue/📚 句子控精选 (2).md"
+            "/Users/kityhello/workplace/tech-docs/wenxue/📚 句子控精选 (2).md"
         )
         config = BroadcastConfig()
         broadcast = build_broadcast("evening", config, date(2026, 6, 26))
@@ -780,7 +835,7 @@ class DailyBroadcastTest(unittest.TestCase):
 
     def test_evening_broadcast_skips_sent_quotes_and_crosses_dates(self):
         quotes = load_evening_quotes(
-            "/Users/kityhello/workplace/知识库/wenxue/📚 句子控精选 (2).md"
+            "/Users/kityhello/workplace/tech-docs/wenxue/📚 句子控精选 (2).md"
         )
         june_first = [quote for quote in quotes if quote["date"] == "2026-06-01"]
         config = BroadcastConfig(

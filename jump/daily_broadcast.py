@@ -6,6 +6,7 @@ import os
 import random
 import re
 import ssl
+import sys
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -17,6 +18,14 @@ from pathlib import Path
 import certifi
 
 from dingtalk_client import send_dingtalk_message
+from learning_inventory import (
+    INVENTORY_MINIMUM,
+    load_inventory,
+    mark_card_sent,
+    refresh_inventory,
+    save_inventory,
+    select_card,
+)
 
 
 BROADCAST_SCHEDULE = {
@@ -28,11 +37,14 @@ BROADCAST_SCHEDULE = {
 }
 DEFAULT_STATE_PATH = Path(__file__).with_name(".daily_broadcast_state.json")
 DEFAULT_NEWS_STATE_PATH = Path(__file__).with_name(".dadao_message_state.json")
+DEFAULT_LEARNING_INVENTORY_PATH = Path(__file__).with_name(
+    ".learning_inventory.json"
+)
 EVENING_QUOTES_PATH = Path(
-    "/Users/kityhello/workplace/知识库/wenxue/📚 句子控精选 (2).md"
+    "/Users/kityhello/workplace/tech-docs/wenxue/📚 句子控精选 (2).md"
 )
 EVENING_QUOTES_FALLBACK_PATH = Path(
-    "/Users/kityhello/workplace/知识库/wenxue/冬牧场-划线.md"
+    "/Users/kityhello/workplace/tech-docs/wenxue/冬牧场-划线.md"
 )
 EVENING_CLOSINGS_PATH = Path(__file__).with_name("evening_closings.txt")
 EVENING_MILESTONE = "小猪播报100天了～！"
@@ -247,6 +259,102 @@ LEARNING_THEMES = [
                 "example": "做决定前问放弃了什么；继续项目前只看未来；设指标时想象如何作弊；扩团队前先定位瓶颈究竟在哪里。",
                 "question": "下周做一个重要决定时，你准备先使用哪一个问题？",
                 "extension": "这些概念不是追求每次都算得精确，而是提供一套检查清单，让隐性成本、激励偏差和协调负担进入讨论。",
+            },
+        ],
+    },
+    {
+        "id": "technology",
+        "title": "科技：理解数字世界",
+        "source": "Cloudflare Learning Center",
+        "source_url": "https://www.cloudflare.com/learning/",
+        "cards": [
+            {
+                "title": "互联网并不是一朵云",
+                "conclusion": "互联网是大量独立网络通过统一协议互相连接形成的系统，数据通常会被拆成小包，经由不同节点转发到目的地。",
+                "example": "打开网页时，浏览器先找到服务器地址，再通过多个路由节点收发数据；某一段线路拥堵时，数据可能改走其他路径。",
+                "question": "一次网页加载为什么可能同时依赖几十台不同公司的服务器？",
+                "extension": "理解分层和分包后，就能区分网站、互联网、浏览器与云服务。它们相互配合，但并不是同一个东西。",
+                "source_url": "https://www.cloudflare.com/learning/network-layer/how-does-the-internet-work/",
+            },
+        ],
+    },
+    {
+        "id": "health",
+        "title": "健康：读懂身体信号",
+        "source": "World Health Organization",
+        "source_url": "https://www.who.int/",
+        "cards": [
+            {
+                "title": "久坐不能只靠下班运动抵消",
+                "conclusion": "规律运动很重要，但长时间连续坐着仍应被主动打断。健康建议同时关注每周活动总量和一天中的静坐时间。",
+                "example": "即使晚上跑步半小时，白天连续坐数小时也会让身体长期处于低活动状态；每隔一段时间起身走动能改变这种节奏。",
+                "question": "今天哪个固定动作可以成为提醒自己起身活动的触发点？",
+                "extension": "不必把每次活动都做成正式训练。接水、走楼梯或站着通话都能增加日常活动，身体不适时应听从专业医疗建议。",
+                "source_url": "https://www.who.int/news-room/fact-sheets/detail/physical-activity",
+            },
+        ],
+    },
+    {
+        "id": "art",
+        "title": "艺术：学习如何观看",
+        "source": "The Metropolitan Museum of Art",
+        "source_url": "https://www.metmuseum.org/",
+        "cards": [
+            {
+                "title": "看画不必先猜标准答案",
+                "conclusion": "观看艺术品可以先从可观察的事实开始：人物、颜色、材质、光线和构图，再把感受与历史背景连接起来。",
+                "example": "面对一幅陌生肖像，先描述人物姿态和视线，再查服装与委托背景，通常比一开始追问作品寓意更容易进入画面。",
+                "question": "如果暂时不看作品说明，你最先注意到的三个视觉细节是什么？",
+                "extension": "视觉分析不是拒绝知识，而是把观察和解释分开。这样既能保留自己的发现，也能检查后续资料是否真的得到画面支持。",
+                "source_url": "https://www.metmuseum.org/learn/educators/curriculum-resources/art-of-seeing",
+            },
+        ],
+    },
+    {
+        "id": "geography",
+        "title": "地理：看见地球的结构",
+        "source": "United States Geological Survey",
+        "source_url": "https://www.usgs.gov/",
+        "cards": [
+            {
+                "title": "大陆一直在缓慢移动",
+                "conclusion": "地球表面的岩石圈被分成多个板块，它们以每年数厘米左右的速度移动，长期累积后会重塑海洋与大陆。",
+                "example": "板块相撞可以抬升山脉，分离会形成新的洋壳，彼此错动则容易积累应力并产生地震。",
+                "question": "如果板块移动如此缓慢，科学家如何确认它正在发生？",
+                "extension": "现代卫星定位能直接测量板块位移，海底磁条带和化石分布则保存了更长时间尺度上的证据。",
+                "source_url": "https://pubs.usgs.gov/gip/dynamic/dynamic.html",
+            },
+        ],
+    },
+    {
+        "id": "language",
+        "title": "语言：理解表达如何变化",
+        "source": "Linguistic Society of America",
+        "source_url": "https://www.linguisticsociety.org/",
+        "cards": [
+            {
+                "title": "语言变化不是语言退化",
+                "conclusion": "发音、词义和语法会随着使用者与社会环境变化。今天被视为规范的表达，也可能来自过去的创新或误用。",
+                "example": "新技术会带来新词，群体接触会发生借词，常用结构还可能逐渐简化；变化并不自动意味着表达能力下降。",
+                "question": "你最近接受了哪个过去觉得奇怪的新词或新用法？",
+                "extension": "规范语言适合正式协作，描述语言则研究人们实际怎样说。区分两者，有助于同时理解规则与变化。",
+                "source_url": "https://www.linguisticsociety.org/resource/what-language",
+            },
+        ],
+    },
+    {
+        "id": "life",
+        "title": "生活常识：降低日常风险",
+        "source": "United States Department of Agriculture",
+        "source_url": "https://www.usda.gov/",
+        "cards": [
+            {
+                "title": "闻起来正常不代表食物安全",
+                "conclusion": "导致食源性疾病的微生物不一定改变食物的气味、颜色或味道，判断安全不能只依赖感官。",
+                "example": "熟食在室温放置过久，即使外观正常也可能进入微生物快速繁殖的温度区间；及时冷藏比事后闻一闻更可靠。",
+                "question": "家里哪些食物最容易因为忘记时间而在室温放得过久？",
+                "extension": "保持清洁、生熟分开、彻底加热并及时冷藏，是比凭经验试吃更稳妥的做法；高风险人群尤其需要谨慎。",
+                "source_url": "https://www.fsis.usda.gov/food-safety/safe-food-handling-and-preparation/food-safety-basics",
             },
         ],
     },
@@ -577,32 +685,40 @@ def learning_content_id(message):
 
 
 def learning_theme_for_day(day):
-    week_index = day.isocalendar().week - 1
-    return LEARNING_THEMES[week_index % len(LEARNING_THEMES)]
+    epoch = date(2026, 1, 5)
+    elapsed_days = (day - epoch).days
+    weeks, weekday = divmod(elapsed_days, 7)
+    workday_index = weeks * 5 + min(weekday, 5)
+    return LEARNING_THEMES[workday_index % len(LEARNING_THEMES)]
 
 
 def format_learning_card(theme, card, day):
-    weekday = day.weekday()
-    yesterday = ""
-    if weekday > 0:
-        yesterday = f"昨日回响：{theme['cards'][weekday - 1]['conclusion']}"
     lines = [
-        f"三分钟知识卡｜{theme['title']}（{weekday + 1}/5）",
+        f"三分钟知识卡｜{theme['title']}",
         f"今日标题：{card['title']}",
     ]
-    if yesterday:
-        lines.append(yesterday)
     lines.extend(
         [
             f"核心结论：{card['conclusion']}",
             f"举个例子：{card['example']}",
             f"多想一步：{card['question']}",
             f"补充说明：{card['extension']}",
-            f"来源：{theme['source']} {theme['source_url']}",
+            f"来源：{theme['source']} {card.get('source_url', theme['source_url'])}",
             "预计阅读：3 分钟",
         ]
     )
     return "\n".join(lines)
+
+
+def format_dynamic_learning_card(card):
+    return "\n".join(
+        [
+            f"三分钟知识卡｜{card['category']}",
+            f"今日标题：{card['title']}",
+            f"内容摘要：{card['summary']}",
+            f"来源：{card['source']} {card['source_url']}",
+        ]
+    )
 
 
 def validate_learning_card(theme, card, message):
@@ -617,9 +733,9 @@ def validate_learning_card(theme, card, message):
     return LEARNING_CARD_MIN_LENGTH <= len(message) <= LEARNING_CARD_MAX_LENGTH
 
 
-def learning_card_keys(theme, day, message):
+def learning_card_keys(theme, card_index, day, message):
     return {
-        "theme_slots": f"{theme['id']}:{day.weekday()}",
+        "theme_slots": f"{theme['id']}:{card_index}",
         "dates": day.isoformat(),
         "content": learning_content_id(message),
     }
@@ -717,24 +833,29 @@ def next_weekend_days(day):
 
 def build_morning(config, day, now_time=None):
     reminder = holiday_line(config, day)
-    excerpt = next(
-        (
-            quote
-            for quote in load_literature_quotes()
-            if evening_quote_id(quote["content"]) not in config.sent_evening_ids
-        ),
-        None,
-    )
-    if excerpt is None:
-        raise ValueError("文学句子库已全部播报完毕，请补充新内容。")
+    excerpts = [
+        quote
+        for quote in load_literature_quotes()
+        if evening_quote_id(quote["content"]) not in config.sent_evening_ids
+    ][:3]
+    if len(excerpts) < 3:
+        raise ValueError("早安句子库剩余内容不足 3 条，已取消播报。")
     message = format_message(config, [
         "早安，冯驰。",
         weather_line(config),
         reminder,
         "今日摘抄：",
-        excerpt["content"],
+        *[
+            f"{index}. {quote['content']}"
+            for index, quote in enumerate(excerpts, 1)
+        ],
     ])
-    context = {"evening_ids": [evening_quote_id(excerpt["content"])]}
+    context = {
+        "evening_ids": [
+            evening_quote_id(quote["content"])
+            for quote in excerpts
+        ]
+    }
     if reminder.startswith("心理学冷知识："):
         fact = reminder.removeprefix("心理学冷知识：")
         context.update(
@@ -750,20 +871,51 @@ def build_morning(config, day, now_time=None):
 def build_noon(config, day, now_time=None):
     if day.weekday() >= 5:
         return None
-    theme = learning_theme_for_day(day)
-    card = theme["cards"][day.weekday()]
-    message = format_learning_card(theme, card, day)
-    if not validate_learning_card(theme, card, message):
-        return None
-    keys = learning_card_keys(theme, day, message)
-    if any(keys[kind] in config.sent_learning_ids[kind] for kind in keys):
-        return None
-    return Broadcast(
-        "noon",
-        BROADCAST_SCHEDULE["noon"],
-        format_message(config, message.splitlines()),
-        {"learning_keys": keys, "theme_id": theme["id"]},
+    inventory = load_inventory(DEFAULT_LEARNING_INVENTORY_PATH)
+    dynamic_card = select_card(inventory)
+    if dynamic_card:
+        message = format_dynamic_learning_card(dynamic_card)
+        keys = {
+            "theme_slots": f"dynamic:{dynamic_card['source_url']}",
+            "dates": day.isoformat(),
+            "content": learning_content_id(message),
+        }
+        if any(keys[kind] in config.sent_learning_ids[kind] for kind in keys):
+            return None
+        return Broadcast(
+            "noon",
+            BROADCAST_SCHEDULE["noon"],
+            format_message(config, message.splitlines()),
+            {
+                "learning_keys": keys,
+                "theme_id": dynamic_card["category"],
+                "dynamic_card": dynamic_card,
+            },
+        )
+    preferred_theme = learning_theme_for_day(day)
+    preferred_index = LEARNING_THEMES.index(preferred_theme)
+    ordered_themes = (
+        LEARNING_THEMES[preferred_index:] + LEARNING_THEMES[:preferred_index]
     )
+    for theme in ordered_themes:
+        for card_index, card in enumerate(theme["cards"]):
+            message = format_learning_card(theme, card, day)
+            if not validate_learning_card(theme, card, message):
+                continue
+            keys = learning_card_keys(theme, card_index, day, message)
+            if any(keys[kind] in config.sent_learning_ids[kind] for kind in keys):
+                continue
+            return Broadcast(
+                "noon",
+                BROADCAST_SCHEDULE["noon"],
+                format_message(config, message.splitlines()),
+                {
+                    "learning_keys": keys,
+                    "theme_id": theme["id"],
+                    "card_index": card_index,
+                },
+            )
+    return None
 
 
 def build_industry(config, day, now_time=None):
@@ -1155,6 +1307,13 @@ def save_sent_learning_ids(path, sent_learning_ids):
 def record_learning_card(config, broadcast):
     for kind, value in broadcast.context.get("learning_keys", {}).items():
         config.sent_learning_ids[kind].add(value)
+    card = broadcast.context.get("dynamic_card")
+    if card:
+        inventory = load_inventory(DEFAULT_LEARNING_INVENTORY_PATH)
+        save_inventory(
+            DEFAULT_LEARNING_INVENTORY_PATH,
+            mark_card_sent(inventory, card),
+        )
 
 
 def record_evening_quotes(config, broadcast):
@@ -1340,6 +1499,20 @@ def main():
         config.sent_evening_closing_ids = load_sent_evening_closing_ids(args.state)
         config.sent_countdown_ids = load_sent_countdown_ids(args.state)
         sent_news_ids = set()
+        noon_key = f"{day.isoformat()}:noon"
+        if (
+            config.enabled.get("noon", False)
+            and is_workday(day)
+            and now.time() >= parse_time(BROADCAST_SCHEDULE["noon"])
+            and noon_key not in sent_keys
+        ):
+            inventory = refresh_inventory(DEFAULT_LEARNING_INVENTORY_PATH)
+            if len(inventory["cards"]) < INVENTORY_MINIMUM:
+                print(
+                    f"警告：三分钟知识卡库存仅剩 {len(inventory['cards'])} 条。"
+                    f"{inventory.get('last_error', '')}",
+                    file=sys.stderr,
+                )
         industry_key = f"{day.isoformat()}:industry"
         if (
             config.enabled.get("industry", False)
@@ -1391,6 +1564,14 @@ def main():
     config.sent_evening_ids = load_sent_evening_ids(args.state)
     config.sent_evening_closing_ids = load_sent_evening_closing_ids(args.state)
     config.sent_countdown_ids = load_sent_countdown_ids(args.state)
+    if args.kind == "noon":
+        inventory = refresh_inventory(DEFAULT_LEARNING_INVENTORY_PATH)
+        if len(inventory["cards"]) < INVENTORY_MINIMUM:
+            print(
+                f"警告：三分钟知识卡库存仅剩 {len(inventory['cards'])} 条。"
+                f"{inventory.get('last_error', '')}",
+                file=sys.stderr,
+            )
     sent_news_ids = set()
     if args.kind == "industry" and config.enabled.get("industry", False):
         sent_news_ids = prepare_industry_news(config, args.items_file)
