@@ -1268,6 +1268,13 @@ def load_countdown_experiences(path):
     experiences = {}
     for module in COUNTDOWN_MODULES:
         item = data.get(module, {})
+        standalone_items = item.get("items")
+        if standalone_items is not None:
+            content = [" ".join(value.split()) for value in standalone_items]
+            if len(content) != 100 or len(set(content)) != 100:
+                raise ValueError(f"{module}必须包含 100 条不重复文案。")
+            experiences[module] = content
+            continue
         starts = item.get("starts", [])
         ends = item.get("ends", [])
         content = [

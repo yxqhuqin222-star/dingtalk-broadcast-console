@@ -779,6 +779,15 @@ class DailyBroadcastTest(unittest.TestCase):
                 self.assertEqual(100, len(experiences[module]))
                 self.assertEqual(100, len(set(experiences[module])))
 
+    def test_today_question_uses_100_standalone_questions(self):
+        raw = json.loads(COUNTDOWN_EXPERIENCES_PATH.read_text(encoding="utf-8"))
+        questions = raw["今日小问题"]["items"]
+
+        self.assertEqual(100, len(questions))
+        self.assertEqual(100, len(set(questions)))
+        self.assertNotIn("starts", raw["今日小问题"])
+        self.assertNotIn("ends", raw["今日小问题"])
+
     def test_countdown_skips_sent_content(self):
         experiences = load_countdown_experiences(COUNTDOWN_EXPERIENCES_PATH)
         config = BroadcastConfig()
