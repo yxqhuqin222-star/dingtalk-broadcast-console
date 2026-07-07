@@ -6,6 +6,7 @@ import os
 import random
 import re
 import ssl
+import subprocess
 import sys
 import urllib.parse
 import urllib.request
@@ -31,25 +32,38 @@ from learning_inventory import (
 BROADCAST_SCHEDULE = {
     "morning": "10:00",
     "noon": "11:40",
+    "midday_news": "12:00",
     "industry": "16:30",
     "countdown": "17:30",
     "evening": "19:00",
 }
-DEFAULT_STATE_PATH = Path(__file__).with_name(".daily_broadcast_state.json")
-DEFAULT_NEWS_STATE_PATH = Path(__file__).with_name(".dadao_message_state.json")
-DEFAULT_LEARNING_INVENTORY_PATH = Path(__file__).with_name(
-    ".learning_inventory.json"
-)
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
+DOCS_DIR = BASE_DIR / "docs"
+STATE_DIR = BASE_DIR / "state"
+DEFAULT_STATE_PATH = STATE_DIR / ".daily_broadcast_state.json"
+DEFAULT_NEWS_STATE_PATH = STATE_DIR / ".dadao_message_state.json"
+DEFAULT_LEARNING_INVENTORY_PATH = STATE_DIR / ".learning_inventory.json"
+AI_SIGNAL_DIR = Path("/Users/kityhello/.codex/skills/ai-signal")
+AI_SIGNAL_PREPARE_SCRIPT = AI_SIGNAL_DIR / "scripts" / "prepare_digest.py"
+AI_SIGNAL_MARK_SCRIPT = AI_SIGNAL_DIR / "scripts" / "mark_delivered.py"
+AI_SIGNAL_USER_CONFIG = Path.home() / ".ai-signal" / "config.json"
+DAILY_ARCHIVE_FILES = {
+    "psychology": "心理学冷知识.md",
+    "industry": "大道消息.md",
+    "noon": "三分钟知识卡.md",
+}
 EVENING_QUOTES_PATH = Path(
     "/Users/kityhello/workplace/tech-docs/wenxue/📚 句子控精选 (2).md"
 )
 EVENING_QUOTES_FALLBACK_PATH = Path(
     "/Users/kityhello/workplace/tech-docs/wenxue/冬牧场-划线.md"
 )
-EVENING_CLOSINGS_PATH = Path(__file__).with_name("evening_closings.txt")
+EVENING_CLOSINGS_PATH = DATA_DIR / "evening_closings.txt"
 EVENING_MILESTONE = "小猪播报100天了～！"
-COUNTDOWN_EXPERIENCES_PATH = Path(__file__).with_name(
-    "countdown_experiences.json"
+COUNTDOWN_EXPERIENCES_PATH = DATA_DIR / "countdown_experiences.json"
+DAILY_QUESTION_PATH = Path(
+    "/Users/kityhello/workplace/tech-docs/wenxue/每日一问.md"
 )
 COUNTDOWN_MODULES = (
     "情绪温度",
@@ -74,10 +88,20 @@ WECHAT_SUMMARY_LIMIT = 200
 DEFAULT_ENABLED = {
     "morning": True,
     "noon": True,
+    "midday_news": True,
     "industry": True,
     "countdown": True,
     "evening": True,
 }
+
+
+def write_json(path, data):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 LUNCH_OPTIONS = ["盖饭", "麻辣烫", "轻食沙拉", "牛肉面", "饺子", "日式便当", "砂锅粥"]
 PSYCHOLOGY_FACTS = [
@@ -809,6 +833,375 @@ def weather_line(config):
     return f"{config.city}天气：{weather}"
 
 
+def ai_signal_item_url(item, *names):
+    for name in names:
+        value = item.get(name)
+        if value:
+            return value
+    return ""
+
+
+def ai_signal_score_text(text):
+    keywords = (
+        "agent", "agents", "model", "models", "claude", "openai",
+        "anthropic", "gemini", "deepmind", "gpt", "reasoning",
+        "inference", "robot", "gpu", "nvidia", "startup", "product",
+        "人工智能", "大模型", "模型", "智能体", "推理", "机器人",
+        "投资", "产品", "创业",
+    )
+    short_keywords = ("ai", "agi", "llm", "llms")
+    lowered = (text or "").lower()
+    score = sum(1 for keyword in keywords if keyword in lowered)
+    score += sum(
+        1
+        for keyword in short_keywords
+        if re.search(rf"(?<![a-z0-9]){re.escape(keyword)}(?![a-z0-9])", lowered)
+    )
+    return score
+
+
+def select_ai_signal_tweets(payload, limit=2):
+    candidates = []
+    for account in payload.get("x", []):
+        for tweet in account.get("tweets", []):
+            text = " ".join((tweet.get("text") or "").split())
+            url = tweet.get("url")
+            if not text or not url:
+                continue
+            score = (
+                ai_signal_score_text(text),
+                tweet.get("like_count", 0),
+                tweet.get("retweet_count", 0),
+            )
+            candidates.append((score, account, tweet, text, url))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[:limit]
+
+
+def select_ai_signal_items(payload, key, limit=2):
+    items = []
+    for item in payload.get(key, []):
+        url = ai_signal_item_url(item, "url", "link", "abs_url", "pdf_url")
+        title = " ".join((item.get("title") or "").split())
+        if not title or not url:
+            continue
+        text = " ".join(
+            str(item.get(field) or "")
+            for field in ("title", "summary", "description", "abstract")
+        )
+        items.append((ai_signal_score_text(text), item, title, url))
+    items.sort(key=lambda value: value[0], reverse=True)
+    return items[:limit]
+
+
+def ai_signal_content_preferences(payload):
+    config = payload.get("config") or {}
+    return config.get("contentPreference") or {}
+
+
+def ai_signal_should_skip(payload, name):
+    preferences = ai_signal_content_preferences(payload)
+    return name in set(preferences.get("skipByDefault") or [])
+
+
+def ai_signal_investment_enabled(payload):
+    preferences = ai_signal_content_preferences(payload)
+    return preferences.get("includeInvestmentModule", True)
+
+
+def ai_signal_text_blob(item):
+    return " ".join(
+        str(item.get(field) or "")
+        for field in (
+            "title",
+            "text",
+            "summary",
+            "description",
+            "abstract",
+            "channel",
+            "name",
+            "handle",
+        )
+    )
+
+
+def ai_signal_is_investment(text):
+    lowered = text.lower()
+    keywords = (
+        "invest", "investment", "investing", "market", "markets",
+        "capital", "allocators", "moat", "debt", "financing",
+        "nvidia", "gpu", "neocloud", "hyperscaler", "inference",
+        "semianalysis", "dylan", "pat dorsey", "投资", "融资",
+        "市场", "资本", "护城河", "算力",
+    )
+    return any(keyword in lowered for keyword in keywords)
+
+
+def ai_signal_is_noise(text):
+    lowered = " ".join((text or "").lower().split())
+    if lowered.count("@") >= 4:
+        return True
+    patterns = (
+        "older kid",
+        "good morning",
+        "thank you",
+        "thanks",
+        "haha",
+        "means a lot coming from you",
+        "why use many kernel",
+    )
+    return any(pattern in lowered for pattern in patterns)
+
+
+def ai_signal_source_name(item, account=None):
+    if account:
+        return account.get("name") or account.get("handle") or "X"
+    return item.get("channel") or item.get("source_name") or item.get("source") or "AI Signal"
+
+
+def ai_signal_title_for_item(item, account=None):
+    if item.get("title"):
+        return " ".join(item["title"].split())
+    if item.get("text"):
+        return truncate_text(" ".join(item["text"].split()), 72)
+    return ai_signal_source_name(item, account)
+
+
+def ai_signal_url_for_item(item):
+    return ai_signal_item_url(item, "url", "link", "abs_url", "pdf_url")
+
+
+def ai_signal_summary_for_item(item, account=None):
+    source = ai_signal_source_name(item, account)
+    text = " ".join((item.get("text") or item.get("description") or item.get("abstract") or item.get("summary") or "").split())
+    lowered = f"{ai_signal_title_for_item(item, account)} {text}".lower()
+    if "merge chat and agents" in lowered or ("openai" in lowered and "agents" in lowered):
+        return f"{source} 的信号指向 ChatGPT、工具和 agent 能力继续合并，核心变量是它能否成为可被信任的行动入口。"
+    if "coding" in lowered or "code" in lowered or "vercel" in lowered or "replit" in lowered:
+        return f"{source} 的信号指向 AI coding 的竞争正在转向交付效率、软件质量和团队工作流，而不只是模型跑分。"
+    if "agent" in lowered or "agents" in lowered or "智能体" in lowered:
+        return f"{source} 的信号指向 agent 从单点工具进入工作流入口，重点看它能否稳定完成真实任务，而不只是展示能力。"
+    if "inference" in lowered or "token" in lowered:
+        return f"{source} 的信号指向 inference 可能成为长期需求主线，关键变量是模型能否持续完成有经济价值的工作。"
+    if "nvidia" in lowered or "gpu" in lowered or "neocloud" in lowered or "hyperscaler" in lowered:
+        return f"{source} 的信号指向 AI 基建竞争正在从芯片供给扩展到融资、数据中心、云生态和算力利用率。"
+    if "moat" in lowered or "capital" in lowered or "invest" in lowered or "market" in lowered:
+        return f"{source} 的信号适合放进投资模块看：真正要跟踪的是切换成本、客户 ROI、再投资空间和利润留存。"
+    if text:
+        return f"{source} 的信号值得跟踪：{truncate_text(text, 110)}"
+    return f"{source} 有一条新动态，适合继续观察它对 AI 产品、商业化或投资判断的影响。"
+
+
+def ai_signal_collect_items(payload):
+    collected = []
+    seen = set()
+    for account in payload.get("x", []):
+        for tweet in account.get("tweets", []):
+            url = ai_signal_url_for_item(tweet)
+            if not url:
+                continue
+            text = ai_signal_text_blob(tweet)
+            if ai_signal_is_noise(text):
+                continue
+            dedupe_key = " ".join((tweet.get("text") or "").split()).lower() or url
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            base_score = ai_signal_score_text(text)
+            is_investment = ai_signal_is_investment(text)
+            if base_score == 0 and not is_investment:
+                continue
+            collected.append(
+                {
+                    "source": "x",
+                    "account": account,
+                    "item": tweet,
+                    "url": url,
+                    "score": (
+                        base_score * 1000
+                        + tweet.get("like_count", 0)
+                        + tweet.get("retweet_count", 0) * 5
+                    ),
+                    "investment": is_investment,
+                }
+            )
+    for key, source in (("podcasts", "podcast"), ("articles", "article")):
+        for item in payload.get(key, []):
+            url = ai_signal_url_for_item(item)
+            if not url:
+                continue
+            text = ai_signal_text_blob(item)
+            dedupe_key = url or ai_signal_title_for_item(item).lower()
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            base_score = ai_signal_score_text(text)
+            is_investment = item.get("domain") == "invest" or ai_signal_is_investment(text)
+            if base_score == 0 and not is_investment:
+                continue
+            collected.append(
+                {
+                    "source": source,
+                    "account": None,
+                    "item": item,
+                    "url": url,
+                    "score": base_score * 1000,
+                    "investment": is_investment,
+                }
+            )
+    if not ai_signal_should_skip(payload, "papers"):
+        for item in payload.get("papers", []):
+            url = ai_signal_url_for_item(item)
+            if not url:
+                continue
+            text = ai_signal_text_blob(item)
+            dedupe_key = item.get("arxiv_id") or url
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            base_score = ai_signal_score_text(text)
+            if base_score == 0:
+                continue
+            collected.append(
+                {
+                    "source": "paper",
+                    "account": None,
+                    "item": item,
+                    "url": url,
+                    "score": base_score * 1000,
+                    "investment": False,
+                }
+            )
+    collected.sort(key=lambda value: value["score"], reverse=True)
+    return collected
+
+
+def ai_signal_render_section(lines, title, items, start_index, limit, unique_sources=True):
+    selected = []
+    used_sources = set()
+    for item in items:
+        source = ai_signal_source_name(item["item"], item["account"])
+        if unique_sources and source in used_sources:
+            continue
+        selected.append(item)
+        used_sources.add(source)
+        if len(selected) == limit:
+            break
+    if len(selected) < limit:
+        for item in items:
+            if item in selected:
+                continue
+            selected.append(item)
+            if len(selected) == limit:
+                break
+    if not selected:
+        return start_index
+    lines.append("")
+    lines.append(f"**{title}**")
+    for entry in selected:
+        item = entry["item"]
+        account = entry["account"]
+        headline = ai_signal_title_for_item(item, account)
+        source = ai_signal_source_name(item, account)
+        lines.append("")
+        lines.append(f"{start_index}. {source}：{truncate_text(headline, 54)}")
+        lines.append(ai_signal_summary_for_item(item, account))
+        lines.append(entry["url"])
+        start_index += 1
+    return start_index
+
+
+def ai_signal_render_top_lines(lines, product_items, invest_items):
+    signals = []
+    if product_items:
+        signals.append("AI 产品正在从“聊天/代码工具”继续推向“可执行工作流入口”。")
+    if invest_items:
+        signals.append("AI 投资主线继续围绕算力、融资结构、inference 需求和客户 ROI 展开。")
+    if product_items or invest_items:
+        signals.append("判断价值时优先看真实交付、使用频率、切换成本和利润留存，而不是单次发布热度。")
+    if not signals:
+        return
+    lines.append("")
+    lines.append("**今天最值得跟的 3 条线**")
+    for index, signal in enumerate(signals[:3], 1):
+        lines.append(f"{index}. {signal}")
+
+
+def render_ai_signal_digest(manifest, payload):
+    stats = manifest.get("stats") or {}
+    lines = [
+        "午间新闻",
+        f"AI Signal｜X {stats.get('total_tweets', 0)} 条，播客 {stats.get('podcast_episodes', 0)} 期，论文 {stats.get('arxiv_papers', 0)} 篇。",
+    ]
+    warnings = manifest.get("warnings") or []
+    if warnings:
+        lines.append(f"提示：{warnings[0]}")
+
+    items = ai_signal_collect_items(payload)
+    product_items = [item for item in items if not item["investment"]]
+    invest_items = [item for item in items if item["investment"]]
+
+    index = ai_signal_render_section(lines, "AI 产品 / 商业 / 趋势", product_items, 1, 4)
+    if ai_signal_investment_enabled(payload):
+        ai_signal_render_section(lines, "投资模块", invest_items, 1, 4, unique_sources=False)
+    ai_signal_render_top_lines(lines, product_items, invest_items)
+
+    if not product_items and (not ai_signal_investment_enabled(payload) or not invest_items):
+        lines.append("今天暂无符合已确认口径的新内容。")
+    else:
+        lines.append("想深读的话，可以直接说：展开第 1 条。")
+    return "\n".join(lines)
+
+
+def prepare_ai_signal_digest(include_seen=False):
+    if not AI_SIGNAL_PREPARE_SCRIPT.exists():
+        raise ValueError(f"找不到 ai-signal 脚本：{AI_SIGNAL_PREPARE_SCRIPT}")
+    command = [sys.executable, str(AI_SIGNAL_PREPARE_SCRIPT)]
+    if include_seen:
+        command.append("--include-seen")
+    result = subprocess.run(
+        command,
+        cwd=str(AI_SIGNAL_PREPARE_SCRIPT.parent),
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"AI Signal 生成失败：{truncate_text(result.stderr.strip(), 200)}")
+    try:
+        manifest = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError("AI Signal 没有返回有效 JSON。") from exc
+    payload_file = manifest.get("payload_file")
+    if not payload_file:
+        raise ValueError("AI Signal 没有生成 payload 文件。")
+    payload = json.loads(Path(payload_file).read_text(encoding="utf-8"))
+    if AI_SIGNAL_USER_CONFIG.exists():
+        user_config = json.loads(AI_SIGNAL_USER_CONFIG.read_text(encoding="utf-8-sig"))
+        payload.setdefault("config", {}).update(
+            {
+                "contentPreference": user_config.get("contentPreference", {}),
+            }
+        )
+    return manifest, payload
+
+
+def mark_ai_signal_delivered(mark_file):
+    if not mark_file:
+        return
+    result = subprocess.run(
+        [sys.executable, str(AI_SIGNAL_MARK_SCRIPT), "--file", str(mark_file)],
+        cwd=str(AI_SIGNAL_MARK_SCRIPT.parent),
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"AI Signal 已发送标记失败：{truncate_text(result.stderr.strip(), 200)}")
+
+
 def holiday_line(config, day):
     if config.holiday_name:
         return f"今日提醒：{config.holiday_name}"
@@ -828,7 +1221,7 @@ def holiday_line(config, day):
 
 
 def next_weekend_days(day):
-    return 5 - day.weekday() if day.weekday() < 5 else 0
+    return 4 - day.weekday() if day.weekday() < 5 else 0
 
 
 def build_morning(config, day, now_time=None):
@@ -918,6 +1311,26 @@ def build_noon(config, day, now_time=None):
     return None
 
 
+def build_midday_news(config, day, now_time=None):
+    manifest, payload = prepare_ai_signal_digest()
+    lines = render_ai_signal_digest(manifest, payload).splitlines()
+    if (
+        config.dingtalk_keyword
+        and not any(config.dingtalk_keyword in line for line in lines)
+        and len(lines) > 1
+    ):
+        lines[1] = f"{config.dingtalk_keyword}｜{lines[1]}"
+    return Broadcast(
+        "midday_news",
+        BROADCAST_SCHEDULE["midday_news"],
+        format_message(config, lines),
+        {
+            "ai_signal_delivery_mark_file": manifest.get("delivery_mark_file"),
+            "ai_signal_stats": manifest.get("stats") or {},
+        },
+    )
+
+
 def build_industry(config, day, now_time=None):
     news = config.industry_news[:INDUSTRY_ITEM_LIMIT]
     source = config.industry_source
@@ -971,6 +1384,7 @@ def build_countdown(config, day, now_time=None):
     minutes = max(0, int((end_dt - now_dt).total_seconds() // 60))
     weekend_days = next_weekend_days(day)
     experiences = load_countdown_experiences(COUNTDOWN_EXPERIENCES_PATH)
+    experiences["今日小问题"] = load_daily_questions(DAILY_QUESTION_PATH)
     selected = {}
     for module in COUNTDOWN_MODULES:
         selected[module] = next(
@@ -1056,6 +1470,7 @@ def build_evening(config, day, now_time=None):
 BUILDERS = {
     "morning": build_morning,
     "noon": build_noon,
+    "midday_news": build_midday_news,
     "industry": build_industry,
     "countdown": build_countdown,
     "evening": build_evening,
@@ -1106,10 +1521,7 @@ def save_sent_keys(path, sent_keys):
     path = Path(path)
     data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     data["sent_keys"] = sorted(sent_keys)
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json(path, data)
 
 
 def load_sent_fact_ids(path):
@@ -1131,10 +1543,7 @@ def save_sent_fact_ids(path, sent_fact_ids):
         category: sorted(ids)
         for category, ids in sent_fact_ids.items()
     }
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json(path, data)
 
 
 def load_sent_learning_ids(path):
@@ -1161,10 +1570,7 @@ def save_sent_evening_ids(path, sent_evening_ids):
     path = Path(path)
     data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     data["sent_evening_ids"] = sorted(sent_evening_ids)
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json(path, data)
 
 
 def load_sent_evening_closing_ids(path):
@@ -1179,10 +1585,7 @@ def save_sent_evening_closing_ids(path, sent_evening_closing_ids):
     path = Path(path)
     data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     data["sent_evening_closing_ids"] = sorted(sent_evening_closing_ids)
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json(path, data)
 
 
 def load_sent_countdown_ids(path):
@@ -1204,10 +1607,7 @@ def save_sent_countdown_ids(path, sent_countdown_ids):
         module: sorted(sent_countdown_ids[module])
         for module in COUNTDOWN_MODULES
     }
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json(path, data)
 
 
 def load_evening_quotes(path):
@@ -1293,6 +1693,27 @@ def load_countdown_experiences(path):
     return experiences
 
 
+def load_daily_questions(path):
+    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    questions = []
+    waiting_for_question = False
+    headings = 0
+    for line in lines:
+        normalized = " ".join(line.split())
+        if re.match(r"^\d+[.)、]\s*今日问题[：:]?$", normalized):
+            headings += 1
+            waiting_for_question = True
+            continue
+        if waiting_for_question and normalized:
+            questions.append(normalized)
+            waiting_for_question = False
+    if not questions or len(questions) != headings:
+        raise ValueError("每日一问文档格式错误，必须为编号、今日问题和问题正文。")
+    if len(questions) != len(set(questions)):
+        raise ValueError("每日一问文档包含重复问题。")
+    return questions
+
+
 def evening_quote_id(content):
     normalized = " ".join(content.split())
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
@@ -1305,10 +1726,7 @@ def save_sent_learning_ids(path, sent_learning_ids):
         kind: sorted(ids)
         for kind, ids in sent_learning_ids.items()
     }
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json(path, data)
 
 
 def record_learning_card(config, broadcast):
@@ -1333,6 +1751,38 @@ def record_evening_quotes(config, broadcast):
 def record_countdown_content(config, broadcast):
     for module, content_id in broadcast.context.get("countdown_ids", {}).items():
         config.sent_countdown_ids[module].add(content_id)
+
+
+def record_ai_signal_delivery(broadcast):
+    if broadcast.kind == "midday_news":
+        mark_ai_signal_delivered(broadcast.context.get("ai_signal_delivery_mark_file"))
+
+
+def archive_daily_broadcast(broadcast, day, docs_dir=DOCS_DIR):
+    if not broadcast:
+        return
+    archive_key = None
+    content = broadcast.message.strip()
+    if broadcast.kind == "morning" and broadcast.context.get("fact_category") == "psychology":
+        archive_key = "psychology"
+        content = f"心理学冷知识：{broadcast.context['fact']}"
+    elif broadcast.kind == "industry":
+        archive_key = "industry"
+    elif broadcast.kind == "noon":
+        archive_key = "noon"
+    if not archive_key:
+        return
+
+    path = Path(docs_dir) / DAILY_ARCHIVE_FILES[archive_key]
+    entry = f"## {day.isoformat()}\n\n{content}\n\n---\n\n"
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    if entry in existing:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as file:
+        if existing and not existing.endswith("\n"):
+            file.write("\n")
+        file.write(entry)
 
 
 def validate_jike_item(item):
@@ -1399,10 +1849,7 @@ def save_sent_news_ids(path, source, sent_ids):
         old_owen_ids = data.pop("sent_urls", [])
         data["sources"] = {"owen": {"sent_ids": old_owen_ids}}
     data["sources"][source] = {"sent_ids": sorted(sent_ids)}
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json(path, data)
 
 
 def load_sent_news_urls(path=DEFAULT_NEWS_STATE_PATH):
@@ -1550,9 +1997,11 @@ def main():
                     config.sent_fact_ids[broadcast.context["fact_category"]].add(
                         broadcast.context["fact_id"]
                     )
+                archive_daily_broadcast(broadcast, day)
                 record_learning_card(config, broadcast)
                 record_evening_quotes(config, broadcast)
                 record_countdown_content(config, broadcast)
+                record_ai_signal_delivery(broadcast)
                 sent_keys.add(key)
         if args.send:
             save_sent_keys(args.state, sent_keys)
@@ -1605,9 +2054,11 @@ def main():
                 broadcast.context["fact_id"]
             )
             save_sent_fact_ids(args.state, config.sent_fact_ids)
+        archive_daily_broadcast(broadcast, day)
         record_learning_card(config, broadcast)
         record_evening_quotes(config, broadcast)
         record_countdown_content(config, broadcast)
+        record_ai_signal_delivery(broadcast)
         save_sent_learning_ids(args.state, config.sent_learning_ids)
         save_sent_evening_ids(args.state, config.sent_evening_ids)
         save_sent_evening_closing_ids(

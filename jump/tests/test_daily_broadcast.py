@@ -6,11 +6,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from daily_broadcast import (
     BROADCAST_SCHEDULE,
+    Broadcast,
     BroadcastConfig,
+    archive_daily_broadcast,
     answer_followup,
     build_broadcast,
     due_broadcasts,
@@ -19,6 +21,7 @@ from daily_broadcast import (
     fetch_owen_links,
     fetch_wechat_feeds,
     filter_unsent_news,
+    fact_id,
     load_sent_news_ids,
     load_sent_news_urls,
     load_config,
@@ -34,6 +37,8 @@ from daily_broadcast import (
     parse_owen_links,
     parse_wechat_feed,
     prepare_industry_news,
+    record_ai_signal_delivery,
+    render_ai_signal_digest,
     news_item_id,
     save_sent_news_ids,
     save_sent_news_urls,
@@ -49,6 +54,7 @@ from daily_broadcast import (
     load_literature_quotes,
     load_numbered_quotes,
     load_countdown_experiences,
+    load_daily_questions,
     COUNTDOWN_EXPERIENCES_PATH,
     COUNTDOWN_MODULES,
     EVENING_CLOSINGS_PATH,
@@ -76,6 +82,7 @@ class DailyBroadcastTest(unittest.TestCase):
     def test_broadcast_schedule_uses_configured_times(self):
         self.assertEqual("10:00", BROADCAST_SCHEDULE["morning"])
         self.assertEqual("11:40", BROADCAST_SCHEDULE["noon"])
+        self.assertEqual("12:00", BROADCAST_SCHEDULE["midday_news"])
         self.assertEqual("19:00", BROADCAST_SCHEDULE["evening"])
 
     def test_morning_reminder_is_a_psychology_fact(self):
@@ -196,6 +203,104 @@ class DailyBroadcastTest(unittest.TestCase):
         self.assertEqual("健康", broadcast.context["theme_id"])
         self.assertIn("来源：WHO https://example.com/health", broadcast.message)
 
+    def test_midday_news_uses_ai_signal_payload(self):
+        manifest = {
+            "stats": {
+                "total_tweets": 1,
+                "podcast_episodes": 1,
+                "arxiv_papers": 1,
+            },
+            "delivery_mark_file": "/tmp/delivery-mark.json",
+        }
+        payload = {
+            "config": {
+                "contentPreference": {
+                    "skipByDefault": ["papers"],
+                    "includeInvestmentModule": True,
+                }
+            },
+            "x": [
+                {
+                    "name": "Builder",
+                    "handle": "builder",
+                    "tweets": [
+                        {
+                            "text": "New AI agent product update",
+                            "url": "https://x.com/builder/status/1",
+                            "like_count": 10,
+                            "retweet_count": 1,
+                        }
+                    ],
+                }
+            ],
+            "podcasts": [
+                {
+                    "channel": "AI Show",
+                    "title": "Agents in production",
+                    "description": "A practical discussion about AI product deployment.",
+                    "link": "https://example.com/podcast",
+                },
+                {
+                    "channel": "Capital Allocators",
+                    "domain": "invest",
+                    "title": "Moat investing in AI markets",
+                    "description": "A discussion about capital allocation, market structure, and moats.",
+                    "link": "https://example.com/invest",
+                }
+            ],
+            "articles": [],
+            "papers": [
+                {
+                    "title": "Agent Benchmarks",
+                    "abstract": "This paper evaluates AI agents across realistic tasks.",
+                    "abs_url": "https://arxiv.org/abs/2607.00001",
+                }
+            ],
+        }
+
+        with patch("daily_broadcast.prepare_ai_signal_digest", return_value=(manifest, payload)):
+            broadcast = build_broadcast("midday_news", BroadcastConfig(), date(2026, 7, 7))
+
+        self.assertEqual("midday_news", broadcast.kind)
+        self.assertIn("午间新闻", broadcast.message)
+        self.assertIn("AI 产品 / 商业 / 趋势", broadcast.message)
+        self.assertIn("投资模块", broadcast.message)
+        self.assertIn("今天最值得跟的 3 条线", broadcast.message)
+        self.assertIn("Builder：New AI agent product update", broadcast.message)
+        self.assertIn("https://x.com/builder/status/1", broadcast.message)
+        self.assertIn("AI Show：Agents in production", broadcast.message)
+        self.assertIn("Capital Allocators：Moat investing in AI markets", broadcast.message)
+        self.assertNotIn("Agent Benchmarks", broadcast.message)
+        self.assertEqual(
+            "/tmp/delivery-mark.json",
+            broadcast.context["ai_signal_delivery_mark_file"],
+        )
+
+    def test_ai_signal_digest_reports_empty_payload(self):
+        message = render_ai_signal_digest(
+            {"stats": {}, "warnings": []},
+            {
+                "config": {"contentPreference": {"skipByDefault": ["papers"]}},
+                "x": [],
+                "podcasts": [],
+                "articles": [],
+                "papers": [],
+            },
+        )
+        self.assertIn("午间新闻", message)
+        self.assertIn("今天暂无符合已确认口径的新内容。", message)
+
+    def test_record_ai_signal_delivery_marks_after_send(self):
+        broadcast = Broadcast(
+            "midday_news",
+            "12:00",
+            "午间新闻",
+            {"ai_signal_delivery_mark_file": "/tmp/delivery-mark.json"},
+        )
+        with patch("daily_broadcast.mark_ai_signal_delivered") as mark:
+            record_ai_signal_delivery(broadcast)
+        mark.assert_called_once_with("/tmp/delivery-mark.json")
+
     def test_psychology_fact_does_not_repeat_sent_content(self):
         config = BroadcastConfig(weather="晴")
         first_morning = build_broadcast("morning", config, date(2026, 6, 22))
@@ -212,6 +317,44 @@ class DailyBroadcastTest(unittest.TestCase):
         morning = build_broadcast("morning", config, date(2026, 6, 26))
         self.assertIn("心理学冷知识题库已用完", morning.message)
         self.assertNotIn("fact_id", morning.context)
+
+    def test_sent_broadcasts_are_archived_to_daily_docs(self):
+        with TemporaryDirectory() as directory:
+            docs_dir = Path(directory)
+            day = date(2026, 7, 7)
+            morning = build_broadcast("morning", BroadcastConfig(weather="晴"), day)
+            noon = build_broadcast("noon", BroadcastConfig(), day)
+            industry = build_broadcast(
+                "industry",
+                BroadcastConfig(
+                    industry_news=[
+                        {
+                            "author": "作者",
+                            "published_at": "刚刚",
+                            "content": "大道正文",
+                            "url": "https://web.okjike.com/originalPosts/example",
+                        }
+                    ]
+                ),
+                day,
+            )
+
+            archive_daily_broadcast(morning, day, docs_dir)
+            archive_daily_broadcast(noon, day, docs_dir)
+            archive_daily_broadcast(industry, day, docs_dir)
+            archive_daily_broadcast(noon, day, docs_dir)
+
+            psychology_doc = (docs_dir / "心理学冷知识.md").read_text(encoding="utf-8")
+            noon_doc = (docs_dir / "三分钟知识卡.md").read_text(encoding="utf-8")
+            industry_doc = (docs_dir / "大道消息.md").read_text(encoding="utf-8")
+
+        self.assertIn("## 2026-07-07", psychology_doc)
+        self.assertIn("心理学冷知识：", psychology_doc)
+        self.assertNotIn("早安，冯驰。", psychology_doc)
+        self.assertIn("三分钟知识卡｜", noon_doc)
+        self.assertEqual(1, noon_doc.count("## 2026-07-07"))
+        self.assertIn("大道消息｜即刻精选", industry_doc)
+        self.assertIn("原文：https://web.okjike.com/originalPosts/example", industry_doc)
 
     def test_all_learning_cards_meet_length_and_source_rules(self):
         monday = date(2026, 6, 22)
@@ -756,6 +899,16 @@ class DailyBroadcastTest(unittest.TestCase):
         )
         self.assertIn("距下班约 1 小时 30 分钟", broadcast.message)
 
+    def test_countdown_subtracts_today_from_weekend_days(self):
+        broadcast = build_broadcast(
+            "countdown",
+            BroadcastConfig(),
+            date(2026, 7, 7),
+            now_time=datetime(2026, 7, 7, 17, 30).time(),
+        )
+
+        self.assertIn("距周末还有 3 天。", broadcast.message)
+
     def test_countdown_contains_all_five_experience_modules(self):
         broadcast = build_broadcast(
             "countdown",
@@ -779,17 +932,49 @@ class DailyBroadcastTest(unittest.TestCase):
                 self.assertEqual(100, len(experiences[module]))
                 self.assertEqual(100, len(set(experiences[module])))
 
-    def test_today_question_uses_100_standalone_questions(self):
-        raw = json.loads(COUNTDOWN_EXPERIENCES_PATH.read_text(encoding="utf-8"))
-        questions = raw["今日小问题"]["items"]
-
+    def test_today_question_uses_local_markdown_questions(self):
+        questions = load_daily_questions(
+            Path("/Users/kityhello/workplace/tech-docs/wenxue/每日一问.md")
+        )
         self.assertEqual(100, len(questions))
         self.assertEqual(100, len(set(questions)))
-        self.assertNotIn("starts", raw["今日小问题"])
-        self.assertNotIn("ends", raw["今日小问题"])
+
+    def test_load_daily_questions_parses_numbered_blocks(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "questions.md"
+            path.write_text(
+                "# 每日一问\n\n"
+                "1. 今日问题：  \n第一个问题？\n\n"
+                "2. 今日问题：  \n第二个问题？\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                ["第一个问题？", "第二个问题？"],
+                load_daily_questions(path),
+            )
+
+    def test_countdown_uses_first_unsent_daily_question(self):
+        questions = load_daily_questions(
+            Path("/Users/kityhello/workplace/tech-docs/wenxue/每日一问.md")
+        )
+        config = BroadcastConfig()
+        config.sent_countdown_ids["今日小问题"].add(fact_id(questions[0]))
+
+        broadcast = build_broadcast(
+            "countdown",
+            config,
+            date(2026, 7, 6),
+            now_time=datetime(2026, 7, 6, 17, 30).time(),
+        )
+
+        self.assertIn(f"今日小问题：{questions[1]}", broadcast.message)
 
     def test_countdown_skips_sent_content(self):
         experiences = load_countdown_experiences(COUNTDOWN_EXPERIENCES_PATH)
+        experiences["今日小问题"] = load_daily_questions(
+            Path("/Users/kityhello/workplace/tech-docs/wenxue/每日一问.md")
+        )
         config = BroadcastConfig()
         for module in COUNTDOWN_MODULES:
             config.sent_countdown_ids[module].add(
@@ -919,9 +1104,27 @@ class DailyBroadcastTest(unittest.TestCase):
     def test_due_broadcasts_send_each_time_point_once(self):
         config = BroadcastConfig()
         now = datetime(2026, 6, 26, 17, 45)
-        sent = {"2026-06-26:morning", "2026-06-26:noon"}
+        sent = {
+            "2026-06-26:morning",
+            "2026-06-26:noon",
+            "2026-06-26:midday_news",
+        }
         due = due_broadcasts(config, now, sent)
         self.assertEqual(["countdown"], [broadcast.kind for _, broadcast in due])
+
+    def test_due_broadcasts_include_midday_news_at_noon(self):
+        config = BroadcastConfig()
+        now = datetime(2026, 7, 7, 12, 0)
+        sent = {"2026-07-07:morning", "2026-07-07:noon"}
+        with patch(
+            "daily_broadcast.prepare_ai_signal_digest",
+            return_value=(
+                {"stats": {}, "delivery_mark_file": "/tmp/delivery-mark.json"},
+                {"x": [], "podcasts": [], "articles": [], "papers": []},
+            ),
+        ):
+            due = due_broadcasts(config, now, sent)
+        self.assertEqual(["midday_news"], [broadcast.kind for _, broadcast in due])
 
     def test_due_broadcasts_can_include_preloaded_jike_news(self):
         config = BroadcastConfig(
@@ -935,7 +1138,11 @@ class DailyBroadcastTest(unittest.TestCase):
             ]
         )
         now = datetime(2026, 6, 26, 17, 45)
-        sent = {"2026-06-26:morning", "2026-06-26:noon"}
+        sent = {
+            "2026-06-26:morning",
+            "2026-06-26:noon",
+            "2026-06-26:midday_news",
+        }
         due = due_broadcasts(config, now, sent)
         self.assertEqual(["industry", "countdown"], [broadcast.kind for _, broadcast in due])
 

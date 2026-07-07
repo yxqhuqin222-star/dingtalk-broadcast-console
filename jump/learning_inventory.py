@@ -231,7 +231,9 @@ def load_inventory(path):
 
 
 def save_inventory(path, inventory):
-    Path(path).write_text(
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
         json.dumps(inventory, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )

@@ -14,8 +14,9 @@ import certifi
 from bs4 import BeautifulSoup
 
 
-DEFAULT_CONFIG_PATH = Path(__file__).with_name("wechat_monitors.json")
-DEFAULT_STATE_PATH = Path(__file__).with_name(".wechat_monitor_state.json")
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_CONFIG_PATH = BASE_DIR / "config" / "wechat_monitors.json"
+DEFAULT_STATE_PATH = BASE_DIR / "state" / ".wechat_monitor_state.json"
 SEARCH_URL = "https://weixin.sogou.com/weixin"
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 SHANGHAI_TZ = timezone(timedelta(hours=8))
@@ -43,6 +44,7 @@ def load_state(path=DEFAULT_STATE_PATH):
 
 def save_state(path, state):
     path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = path.with_suffix(f"{path.suffix}.tmp")
     temporary_path.write_text(
         json.dumps(state, ensure_ascii=False, indent=2),

@@ -1,6 +1,9 @@
+import sys
 import unittest
 from tempfile import TemporaryDirectory
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from wechat_monitor import (
     article_id,

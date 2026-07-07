@@ -19,6 +19,7 @@
   "enabled": {
     "morning": true,
     "noon": true,
+    "midday_news": true,
     "industry": true,
     "countdown": true,
     "evening": true
