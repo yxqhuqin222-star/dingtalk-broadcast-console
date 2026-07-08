@@ -53,6 +53,7 @@ from daily_broadcast import (
     load_evening_quotes,
     load_literature_quotes,
     load_numbered_quotes,
+    load_psychology_facts,
     load_countdown_experiences,
     load_daily_questions,
     COUNTDOWN_EXPERIENCES_PATH,
@@ -311,12 +312,19 @@ class DailyBroadcastTest(unittest.TestCase):
 
     def test_fact_pool_exhaustion_does_not_repeat(self):
         config = BroadcastConfig(weather="晴")
-        from daily_broadcast import PSYCHOLOGY_FACTS, fact_id
 
-        config.sent_fact_ids["psychology"] = {fact_id(fact) for fact in PSYCHOLOGY_FACTS}
+        config.sent_fact_ids["psychology"] = {
+            fact_id(fact) for fact in load_psychology_facts()
+        }
         morning = build_broadcast("morning", config, date(2026, 6, 26))
         self.assertIn("心理学冷知识题库已用完", morning.message)
         self.assertNotIn("fact_id", morning.context)
+
+    def test_psychology_fact_pool_has_local_inventory(self):
+        facts = load_psychology_facts()
+
+        self.assertGreaterEqual(len(facts), 100)
+        self.assertEqual(len(facts), len({fact_id(fact) for fact in facts}))
 
     def test_sent_broadcasts_are_archived_to_daily_docs(self):
         with TemporaryDirectory() as directory:

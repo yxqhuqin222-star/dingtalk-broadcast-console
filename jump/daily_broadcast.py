@@ -41,6 +41,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DOCS_DIR = BASE_DIR / "docs"
 STATE_DIR = BASE_DIR / "state"
+PSYCHOLOGY_FACTS_PATH = DATA_DIR / "psychology_facts.json"
 DEFAULT_STATE_PATH = STATE_DIR / ".daily_broadcast_state.json"
 DEFAULT_NEWS_STATE_PATH = STATE_DIR / ".dadao_message_state.json"
 DEFAULT_LEARNING_INVENTORY_PATH = STATE_DIR / ".learning_inventory.json"
@@ -770,6 +771,32 @@ def pick_unsent_fact(items, sent_ids, day, salt):
     return stable_pick(unsent, day, salt)
 
 
+def load_psychology_facts(path=PSYCHOLOGY_FACTS_PATH):
+    path = Path(path)
+    if not path.exists():
+        return list(PSYCHOLOGY_FACTS)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(data, dict):
+        entries = data.get("facts", [])
+    else:
+        entries = data
+    facts = []
+    for entry in entries:
+        if isinstance(entry, str):
+            fact = entry.strip()
+        elif isinstance(entry, dict):
+            fact = str(entry.get("text", "")).strip()
+        else:
+            fact = ""
+        if fact:
+            facts.append(fact)
+    if not facts:
+        raise ValueError(f"心理学冷知识题库为空：{path}")
+    if len({fact_id(fact) for fact in facts}) != len(facts):
+        raise ValueError(f"心理学冷知识题库包含重复内容：{path}")
+    return facts
+
+
 def format_message(config, lines):
     keyword = config.dingtalk_keyword
     if keyword and not any(keyword in line for line in lines):
@@ -1210,7 +1237,7 @@ def holiday_line(config, day):
         if days >= 0:
             return f"假期雷达：距{config.next_holiday_name}还有 {days} 天"
     fact = pick_unsent_fact(
-        PSYCHOLOGY_FACTS,
+        load_psychology_facts(),
         config.sent_fact_ids["psychology"],
         day,
         "psychology-fact",

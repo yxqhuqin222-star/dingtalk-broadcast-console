@@ -1,0 +1,446 @@
+{
+  "sources": [
+    "https://dictionary.apa.org/",
+    "https://nobaproject.com/modules/",
+    "https://thedecisionlab.com/biases",
+    "https://www.britannica.com/science/psychology"
+  ],
+  "facts": [
+    {
+      "text": "人们通常更容易记住一段信息的开头和结尾，这分别叫首因效应和近因效应。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "把未完成的事情记得更牢，常被称为蔡格尼克效应；写下明确的下一步有助于减少它带来的牵挂。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "人在判断某件事有多常见时，容易依赖最先想到的例子，这叫可得性启发。",
+      "source_url": "https://thedecisionlab.com/biases/availability-heuristic"
+    },
+    {
+      "text": "同样一件事用“获得”还是“失去”来描述，可能影响选择，这种现象叫框架效应。",
+      "source_url": "https://thedecisionlab.com/biases/framing-effect"
+    },
+    {
+      "text": "人们往往高估别人对自己外表和失误的关注程度，这被称为聚光灯效应。",
+      "source_url": "https://thedecisionlab.com/biases/spotlight-effect"
+    },
+    {
+      "text": "确认偏误会让人更容易寻找、记住和相信支持自己原有观点的信息。",
+      "source_url": "https://thedecisionlab.com/biases/confirmation-bias"
+    },
+    {
+      "text": "锚定效应指最先出现的数字或信息会影响后续判断，即使那个锚点并不可靠。",
+      "source_url": "https://thedecisionlab.com/biases/anchoring-bias"
+    },
+    {
+      "text": "损失厌恶让同等金额的损失通常比收益更让人难受，因此人们可能为了避免损失而保守。",
+      "source_url": "https://thedecisionlab.com/biases/loss-aversion"
+    },
+    {
+      "text": "禀赋效应会让人因为已经拥有某样东西，就倾向于给它更高价值。",
+      "source_url": "https://thedecisionlab.com/biases/endowment-effect"
+    },
+    {
+      "text": "沉没成本谬误会让人因为已经投入时间、金钱或精力，而继续做不划算的事。",
+      "source_url": "https://thedecisionlab.com/biases/the-sunk-cost-fallacy"
+    },
+    {
+      "text": "达克效应描述的是能力较低者可能更难准确评估自己的不足，因为评估也需要相关能力。",
+      "source_url": "https://thedecisionlab.com/biases/dunning-kruger-effect"
+    },
+    {
+      "text": "旁观者效应说明现场人数越多，个人越可能以为别人会行动，从而降低主动帮忙的概率。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "基本归因错误会让人解释他人行为时过度强调性格，低估情境压力。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "自利性偏差会让人把成功更多归因于自己，把失败更多归因于外部环境。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "光环效应会让一个突出的好印象扩散到对一个人其他方面的判断。",
+      "source_url": "https://thedecisionlab.com/biases/halo-effect"
+    },
+    {
+      "text": "刻板印象威胁会让人因为担心印证负面刻板印象，反而在相关任务中表现受影响。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "社会助长效应指简单或熟练任务在他人在场时可能表现更好，复杂或不熟练任务则可能更差。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "社会惰化说明在团队任务中，个人贡献不容易被识别时，部分人可能投入更少。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "从众并不总是盲目，有时来自信息不确定，有时来自想被群体接纳。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "认知失调指行为和信念不一致时产生的不舒服感，人们常会改变解释来恢复一致。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "单纯曝光效应说明反复接触某个中性对象，可能让人逐渐更喜欢它。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "互惠原则让人倾向于回报别人先给出的帮助、礼物或让步。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "稀缺感会提高人们对机会或物品的主观价值，即使真实价值没有变化。",
+      "source_url": "https://thedecisionlab.com/biases/scarcity-heuristic"
+    },
+    {
+      "text": "拖延并不只是时间管理问题，也常和情绪调节有关：人会先躲开眼前的不适。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "意图和行动之间常有落差，把“什么时候、在哪里、做什么”写清楚能提高执行概率。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "习惯通常由线索、行为和结果组成，改变环境线索往往比单靠意志力更稳。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "即时奖励比遥远奖励更容易驱动行为，所以长期目标需要被拆成短周期反馈。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "内在动机来自兴趣、意义或掌控感；外在奖励过强时，反而可能削弱原本的兴趣。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "自我决定理论认为自主、胜任和关系感是维持动机的重要心理需要。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "目标越具体，越容易转化成行动；“多运动”通常不如“晚饭后走十分钟”有效。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "人的工作记忆容量有限，复杂任务最好减少同时记住的信息量。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "分散学习通常比考前集中突击更利于长期记忆，这被称为间隔效应。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "主动回忆比反复重读更能巩固记忆，因为它要求大脑重新提取信息。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "交错练习把不同题型混合训练，短期可能更难，长期更能帮助识别问题类型。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "生成效应说明自己先尝试生成答案，通常比直接看到答案更容易记住。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "测试效应说明测验不只是检查学习，也能成为强化记忆的一种学习方式。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "情绪会影响记忆提取，人在相似情绪状态下可能更容易想起相关经历。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "闪光灯记忆让重大事件显得格外清晰，但清晰感不等于每个细节都准确。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "错误信息效应说明事后听到的错误线索可能改变人对原事件的记忆。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "记忆不是录像回放，而是每次提取时都会被线索、情绪和已有知识重新组织。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "注意力更像会移动的聚光灯，多任务通常是快速切换，而不是同时深度处理。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "选择性注意让人能专注目标，但也可能错过眼前明显却不相关的信息。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "变化盲视说明视觉场景发生改变时，如果注意力不在变化处，人可能完全没发现。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "非注意盲视说明当人专注某个任务时，可能看不见本来很显眼的意外刺激。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "鸡尾酒会效应说明嘈杂环境中，人仍可能对自己的名字等重要信息特别敏感。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "认知负荷过高时，理解和决策都会下降，所以说明书和流程越简单越好。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "启动效应指先前接触的信息会悄悄影响之后的反应和判断。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "自动化加工能节省心力，比如熟练打字不需要逐个思考按键。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "情绪感染让一个人的情绪状态通过表情、语气和行为影响周围人。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "面部反馈假说认为表情动作可能反过来影响情绪体验，但具体强度会受情境影响。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "压力本身不只取决于事件大小，也取决于人是否认为自己有资源应对。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "急性压力可能短时间提高警觉，长期压力则更容易消耗注意力和恢复能力。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "情绪命名能帮助人把模糊感受变清楚，有时会降低情绪强度。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "认知重评是重新解释情境来调节情绪，例如把一次反馈看成改进线索。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "压抑情绪表达可能短期维持场面，但常会增加生理和心理消耗。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "积极情绪不只是让人开心，也可能拓宽注意范围，帮助看到更多选择。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "睡眠有助于记忆巩固，学习后休息不是浪费时间，而是让大脑整理信息。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "睡眠不足会削弱注意力、反应速度和情绪调节，影响不一定能被咖啡完全抵消。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "昼夜节律会影响清醒度和表现，个人高效时段并不完全相同。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "梦境常把记忆、情绪和想象重新组合，但不能简单当成固定预言或答案。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "经典条件反射说明原本中性的线索如果总和重要事件一起出现，也可能引发反应。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "操作性条件作用强调行为后果会影响行为频率，奖励和惩罚都属于后果线索。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "间歇性奖励尤其容易维持行为，因为人不知道下一次回报什么时候出现。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "习得性无助指反复经历不可控失败后，人可能在有机会改变时也不再尝试。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "观察学习说明人可以通过看别人做事和承担后果来学习，而不必全部亲自试错。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "自我效能感是人对自己能否完成任务的信念，它会影响坚持程度和挑战选择。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "成长型思维强调能力可以通过策略、练习和反馈改进，但它不是忽视现实差异。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "反馈越具体，越容易转化为改进行动；只说“不错”或“不行”通常帮助有限。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "过度自信偏差会让人高估判断准确度，所以重要决策适合先写下可验证假设。",
+      "source_url": "https://thedecisionlab.com/biases/overconfidence-bias"
+    },
+    {
+      "text": "事后聪明偏差会让结果发生后显得“早就知道”，从而低估当时的不确定性。",
+      "source_url": "https://thedecisionlab.com/biases/hindsight-bias"
+    },
+    {
+      "text": "现状偏误会让人倾向于维持当前选择，即使切换方案可能更好。",
+      "source_url": "https://thedecisionlab.com/biases/status-quo-bias"
+    },
+    {
+      "text": "默认选项很有力量，因为不做选择本身也会沿着默认设置前进。",
+      "source_url": "https://thedecisionlab.com/biases/default-effect"
+    },
+    {
+      "text": "计划谬误会让人低估完成任务所需时间，尤其是熟悉但步骤很多的任务。",
+      "source_url": "https://thedecisionlab.com/biases/planning-fallacy"
+    },
+    {
+      "text": "幸存者偏差让人只看见成功留下来的案例，却忽略失败者的数据。",
+      "source_url": "https://thedecisionlab.com/biases/survivorship-bias"
+    },
+    {
+      "text": "代表性启发会让人根据相似外观判断概率，可能忽略真实基准率。",
+      "source_url": "https://thedecisionlab.com/biases/representativeness-heuristic"
+    },
+    {
+      "text": "基率忽视指人们在判断个案时，常低估总体比例这类背景信息的重要性。",
+      "source_url": "https://thedecisionlab.com/biases/base-rate-fallacy"
+    },
+    {
+      "text": "赌徒谬误会让人以为随机事件短期内会自动“纠正”，例如连续正面后就该反面。",
+      "source_url": "https://thedecisionlab.com/biases/gamblers-fallacy"
+    },
+    {
+      "text": "热手谬误会让人相信连续成功后下一次更可能成功，但具体要看任务是否真的有稳定技能成分。",
+      "source_url": "https://thedecisionlab.com/biases/hot-hand-fallacy"
+    },
+    {
+      "text": "峰终定律说明人对一段经历的回忆，常被最强烈时刻和结尾体验强烈影响。",
+      "source_url": "https://thedecisionlab.com/biases/peak-end-rule"
+    },
+    {
+      "text": "峰值体验不一定代表全过程，评价一段服务或旅行时容易被少数瞬间带偏。",
+      "source_url": "https://thedecisionlab.com/biases/peak-end-rule"
+    },
+    {
+      "text": "适应水平现象说明人会逐渐习惯新的好事或坏事，幸福感常会向基线回落。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "享乐适应让一次奖励的兴奋感会随重复而变弱，所以新鲜感和意义感都很重要。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "社会比较会影响自我评价，向上比较可能激励也可能挫败，取决于解释方式。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "相对剥夺感来自和参照对象比较后的落差，而不只取决于绝对拥有多少。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "同理心包括理解他人处境的认知成分，也包括感受到他人情绪的情感成分。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "观点采择能帮助人从他人角度理解问题，但不等于必须同意对方结论。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "亲社会行为不仅受善意影响，也受规范、责任感、成本和是否有人求助影响。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "群体极化会让立场相近的人讨论后变得更极端，因为彼此强化了已有观点。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "群体思维会让团队为了维持一致而压低异议，增加决策盲区。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "少数派影响通常需要一致性和清晰理由，才更可能让多数人重新思考。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "权威线索会影响服从行为，所以组织里需要允许质疑和复核的制度。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "承诺一致原则会让人倾向于维持已公开表达的选择，即使后来信息发生变化。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "脚在门槛效应指先答应一个小请求后，人更可能答应相关的大请求。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "门在脸上效应指先拒绝一个过大请求后，人可能更愿意接受随后较小的请求。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "相似性会提高好感，人更容易信任和自己有共同点的人。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "接近性会影响关系形成，经常遇见的人更容易发展出熟悉感和好感。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "依恋模式会影响亲密关系中的安全感、距离感和冲突反应。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "人格特质描述的是相对稳定的行为倾向，但具体行为仍会受情境影响。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "大五人格通常用开放性、尽责性、外向性、宜人性和神经质五个维度描述人格差异。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "内外向不是社交能力的简单高低，而更接近能量来源、刺激偏好和社交节奏差异。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "自我概念是人对自己的认识集合，它会影响选择、解释和对反馈的反应。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "自尊会影响人对成功和失败的解释，但健康自尊不等于永远觉得自己正确。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "心理弹性不是没有压力，而是在压力后仍能恢复、调整并继续行动的能力。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "正念练习的核心是觉察当下经验，并减少自动评价和反应。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "感恩练习可能通过把注意力转向已有资源，改善一部分人的主观幸福感。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "幽默可以缓冲压力，但用来否认问题或攻击他人时，效果可能相反。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "边界感能降低关系中的隐性消耗，清楚表达可做与不可做比长期忍耐更稳定。",
+      "source_url": "https://dictionary.apa.org/"
+    },
+    {
+      "text": "复盘时先区分事实、解释和情绪，可以减少把感觉当证据的误判。",
+      "source_url": "https://nobaproject.com/modules/"
+    },
+    {
+      "text": "把任务拆到下一步动作，可以降低启动阻力，因为大脑面对的是具体行为而不是抽象压力。",
+      "source_url": "https://dictionary.apa.org/"
+    }
+  ]
+}
