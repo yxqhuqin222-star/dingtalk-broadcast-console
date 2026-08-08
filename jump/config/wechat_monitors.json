@@ -1,0 +1,11 @@
+{
+  "wechat_monitors": [
+    {
+      "id": "lijigang-weekly",
+      "name": "李继刚｜人生周报",
+      "query": "人生周报 李继刚",
+      "account": "李继刚",
+      "title_prefix": "人生周报"
+    }
+  ]
+}
